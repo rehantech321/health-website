@@ -1477,7 +1477,13 @@ export const SHARED_BODY_HTML: string = `
 </footer>
 
 <!-- ENQUIRY POPUP -->
-<button class="enquiry-launcher" id="enquiryLauncher" onclick="Eldava.toggleEnquiry()">Need help choosing?</button>
+<div class="fab-stack" id="fabStack">
+  <a class="whatsapp-fab" href="https://wa.me/447736517055?text=Hello%20Eldava%20Health%2C%20I%27d%20like%20to%20ask%20about%20an%20assessment." target="_blank" rel="noopener noreferrer" aria-label="Chat with us on WhatsApp, +44 7736 517055" title="WhatsApp us: +44 7736 517055">
+    <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16.04 3C9.02 3 3.32 8.7 3.32 15.72c0 2.42.68 4.78 1.96 6.82L3.2 29l6.66-1.99a12.7 12.7 0 0 0 6.18 1.58c7.02 0 12.72-5.7 12.72-12.72S23.06 3 16.04 3Zm0 23.31c-1.94 0-3.84-.52-5.5-1.5l-.39-.23-3.95 1.18 1.21-3.85-.26-.4a10.55 10.55 0 0 1-1.65-5.66c0-5.83 4.74-10.57 10.57-10.57S26.6 9.02 26.6 14.85s-4.74 10.6-10.56 10.6Zm5.8-7.9c-.32-.16-1.88-.93-2.17-1.03-.29-.11-.5-.16-.71.16-.21.32-.82 1.03-1 1.24-.19.21-.37.24-.69.08-.32-.16-1.34-.5-2.56-1.58-.95-.85-1.58-1.89-1.77-2.21-.18-.32-.02-.49.14-.65.14-.14.32-.37.48-.56.16-.18.21-.32.32-.53.1-.21.05-.4-.03-.56-.08-.16-.71-1.71-.97-2.34-.26-.62-.52-.53-.71-.54h-.61c-.21 0-.56.08-.85.4-.29.32-1.11 1.09-1.11 2.66s1.14 3.08 1.3 3.3c.16.21 2.24 3.42 5.43 4.8.76.33 1.35.52 1.81.67.76.24 1.46.21 2.01.13.61-.09 1.88-.77 2.14-1.51.26-.74.26-1.38.18-1.51-.08-.13-.29-.21-.61-.37Z"/></svg>
+    <span class="whatsapp-fab-label">WhatsApp</span>
+  </a>
+  <button class="enquiry-launcher" id="enquiryLauncher" onclick="Eldava.toggleEnquiry()">Need help choosing?</button>
+</div>
 <div class="enquiry-panel" id="enquiryPanel" hidden>
   <h4 id="enquiryTitle">Talk to our care team</h4>
   <p id="enquirySub">Tell us what you need and we will point you to the right assessment.</p>
