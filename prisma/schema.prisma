@@ -1,0 +1,397 @@
+// Eldava Health data model.
+//
+// Covers the whole patient journey - account -> AI intake -> slot booking ->
+// payment (card in full, or Klarna pay later) -> clinician review -> notes -
+// plus everything else on the site that previously pretended to submit
+// somewhere: enquiries, clinician applications, promo claims and the
+// Founding 500 prepaid vouchers.
+//
+// Money is stored in minor units (pence) as Int throughout. Never Float.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------- accounts
+
+model Patient {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  fullName     String
+  dateOfBirth  DateTime
+  country      String
+  phone        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  intakeSessions IntakeSession[]
+  appointments   Appointment[]
+  vouchers       Voucher[]
+  sessions       Session[]
+}
+
+model Clinician {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  /// Matches a service category key (mind, women, dementia, ...). Decides
+  /// which services this clinician's slots are offered for.
+  specialty    String
+  regulator    String?
+  regNumber    String?
+  bio          String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  slots        AppointmentSlot[]
+  appointments Appointment[]
+  notes        ClinicalNote[]
+  sessions     Session[]
+}
+
+/// One row per logged-in browser. Opaque token, stored hashed; the raw token
+/// only ever lives in an httpOnly cookie. Exactly one of the two ids is set.
+model Session {
+  id          String   @id @default(cuid())
+  tokenHash   String   @unique
+  patientId   String?
+  clinicianId String?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  patient   Patient?   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  clinician Clinician? @relation(fields: [clinicianId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+// ------------------------------------------------------------------ intake
+
+enum IntakeStatus {
+  IN_PROGRESS
+  COMPLETE
+  ABANDONED
+}
+
+/// One AI-led triage conversation. `questions` is the structured set the
+/// model generated; `answers` the patient's replies keyed by question id.
+model IntakeSession {
+  id        String       @id @default(cuid())
+  patientId String
+  specialty String
+  concern   String       @db.Text
+  status    IntakeStatus @default(IN_PROGRESS)
+
+  questions Json @default("[]")
+  answers   Json @default("{}")
+  rounds    Int  @default(0)
+
+  /// True when intake surfaced a safety concern needing urgent signposting.
+  redFlag       Boolean @default(false)
+  redFlagReason String? @db.Text
+
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  patient      Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  summary      IntakeSummary?
+  appointments Appointment[]
+
+  @@index([patientId])
+}
+
+/// The clinician-facing briefing Claude writes from the intake. Generated once
+/// and cached so opening a case in the portal is a read, not a model call.
+model IntakeSummary {
+  id                  String   @id @default(cuid())
+  intakeSessionId     String   @unique
+  presentingComplaint String   @db.Text
+  historySummary      String   @db.Text
+  suggestedFocus      Json     @default("[]")
+  riskFlags           Json     @default("[]")
+  riskLevel           String   @default("routine") // routine | elevated | urgent
+  answerDigest        Json     @default("[]")
+  /// Which model wrote this - or "mock-no-api-key" when no key was configured.
+  model               String
+  generatedAt         DateTime @default(now())
+
+  intakeSession IntakeSession @relation(fields: [intakeSessionId], references: [id], onDelete: Cascade)
+}
+
+// ----------------------------------------------------------------- booking
+
+/// A bookable slot published by a clinician. Taken when an Appointment
+/// references it; the unique constraint on Appointment.slotId is the
+/// double-booking guard.
+model AppointmentSlot {
+  id          String   @id @default(cuid())
+  clinicianId String
+  startsAt    DateTime
+  durationMin Int      @default(60)
+  mode        String   @default("video") // video | phone
+  createdAt   DateTime @default(now())
+
+  clinician   Clinician    @relation(fields: [clinicianId], references: [id], onDelete: Cascade)
+  appointment Appointment?
+
+  @@unique([clinicianId, startsAt])
+  @@index([startsAt])
+}
+
+enum AppointmentStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  /// Held but never paid for within the hold window; slot released.
+  EXPIRED
+}
+
+model Appointment {
+  id              String            @id @default(cuid())
+  reference       String            @unique
+  patientId       String
+  clinicianId     String
+  /// Nullable so an expired or cancelled appointment can release its slot
+  /// while keeping its own record (startsAt/durationMin are denormalised
+  /// below for exactly that reason). Postgres allows many NULLs under a
+  /// unique index, so the constraint still guarantees one live booking per slot.
+  slotId          String?           @unique
+  intakeSessionId String?
+  status          AppointmentStatus @default(PENDING_PAYMENT)
+
+  serviceName String
+  serviceCat  String?
+  /// Full catalogue price in pence, before any promo.
+  listMinor   Int     @default(0)
+  /// Discount applied in pence (0 if none). priceMinor = listMinor - discountMinor.
+  discountMinor Int   @default(0)
+  promoCode   String?
+  /// What is actually charged, in pence.
+  priceMinor  Int
+  currency    String @default("gbp")
+  mode        String @default("video")
+  startsAt    DateTime
+  durationMin Int
+  joinUrl     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient       Patient         @relation(fields: [patientId], references: [id])
+  clinician     Clinician       @relation(fields: [clinicianId], references: [id])
+  slot          AppointmentSlot? @relation(fields: [slotId], references: [id])
+  intakeSession IntakeSession?   @relation(fields: [intakeSessionId], references: [id])
+  payment       Payment?
+  note          ClinicalNote?
+
+  @@index([clinicianId, startsAt])
+  @@index([patientId])
+}
+
+// ---------------------------------------------------------------- vouchers
+
+enum VoucherStatus {
+  PENDING_PAYMENT
+  PAID
+  REDEEMED
+  CANCELLED
+  EXPIRED
+}
+
+/// A Founding 500 prepaid voucher: bought now, redeemed for an assessment
+/// after launch. No slot is involved at purchase time. The live "N of 500
+/// remaining" counter and the cap are both computed from this table.
+model Voucher {
+  id          String        @id @default(cuid())
+  /// Human-readable redemption code, e.g. F500-7K2M-9QXA.
+  code        String        @unique
+  patientId   String
+  serviceName String
+  priceMinor  Int
+  currency    String        @default("gbp")
+  status      VoucherStatus @default(PENDING_PAYMENT)
+  redeemedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  patient Patient  @relation(fields: [patientId], references: [id])
+  payment Payment?
+
+  @@index([status])
+  @@index([patientId])
+}
+
+// ---------------------------------------------------------------- payments
+
+enum PaymentMethod {
+  CARD
+  KLARNA
+}
+
+enum PaymentStatus {
+  REQUIRES_PAYMENT
+  PROCESSING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+/// One payment per appointment OR voucher - exactly one of the two ids is set.
+model Payment {
+  id            String        @id @default(cuid())
+  appointmentId String?       @unique
+  voucherId     String?       @unique
+  method        PaymentMethod
+  status        PaymentStatus @default(REQUIRES_PAYMENT)
+  amountMinor   Int
+  currency      String        @default("gbp")
+
+  stripePaymentIntentId String? @unique
+  /// True when created without Stripe keys, so mock payments are auditable.
+  mock          Boolean @default(false)
+  lastError     String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  voucher     Voucher?     @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+}
+
+/// Idempotency ledger for Stripe webhooks - a replayed event id is a no-op.
+model WebhookEvent {
+  id         String   @id
+  type       String
+  receivedAt DateTime @default(now())
+}
+
+// ------------------------------------------------------------------- notes
+
+/// The clinician's own SOAP note. Deliberately separate from the AI summary:
+/// this is the clinical record, that is a briefing.
+model ClinicalNote {
+  id            String   @id @default(cuid())
+  appointmentId String   @unique
+  clinicianId   String
+
+  subjective String @db.Text
+  objective  String @db.Text
+  assessment String @db.Text
+  plan       String @db.Text
+  /// Set on sign-off. A signed note is refused any further edit.
+  signedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  clinician   Clinician   @relation(fields: [clinicianId], references: [id])
+}
+
+// ------------------------------------------------------------- promo codes
+
+/// Server-side truth for discount codes. The client shows ELDAVA15 in its
+/// banner, but the price is only ever reduced here, at booking time.
+model PromoCode {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  /// Percentage off, 0-100.
+  percentOff Int
+  active    Boolean   @default(true)
+  startsAt  DateTime?
+  endsAt    DateTime?
+  /// Null means unlimited.
+  maxUses   Int?
+  uses      Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  claims PromoClaim[]
+}
+
+/// A visitor entering their email to claim a promo. Lead capture; the
+/// discount itself is applied server-side at booking regardless.
+model PromoClaim {
+  id          String   @id @default(cuid())
+  promoCodeId String
+  email       String
+  source      String   @default("promo-modal") // promo-modal | banner | booking
+  createdAt   DateTime @default(now())
+
+  promoCode PromoCode @relation(fields: [promoCodeId], references: [id])
+
+  @@index([email])
+}
+
+// --------------------------------------------------------------- enquiries
+
+enum EnquiryStatus {
+  NEW
+  IN_PROGRESS
+  CLOSED
+}
+
+/// Every "get in touch" form on the site: employer, school, university,
+/// insurer, health-system, legal, pathway, testimonial, pharmacist, tech and
+/// the default contact form. `kind` is the ENQUIRY_FORMS key; `fields` holds
+/// that form's extra answers.
+model Enquiry {
+  id        String        @id @default(cuid())
+  kind      String
+  name      String
+  email     String
+  /// The team inbox this kind routes to, e.g. partnerships@eldava.com.
+  routedTo  String
+  fields    Json          @default("{}")
+  status    EnquiryStatus @default(NEW)
+  /// Set once the notification email was accepted by the mail provider.
+  notifiedAt DateTime?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([kind, status])
+  @@index([email])
+}
+
+// ------------------------------------------------- clinician applications
+
+enum ApplicationStatus {
+  RECEIVED
+  UNDER_REVIEW
+  APPROVED
+  DECLINED
+}
+
+/// A clinician applying to join the network. Stored for the credentialing
+/// team; nothing here creates a Clinician account - approval does that, after
+/// the regulator registration has actually been checked.
+model ClinicianApplication {
+  id            String            @id @default(cuid())
+  fullName      String
+  email         String
+  passwordHash  String
+  specialty     String
+  country       String
+  qualification String
+  regulator     String
+  regNumber     String
+  experience    String
+  hoursPerWeek  String
+  languages     String
+  status        ApplicationStatus @default(RECEIVED)
+  reviewNotes   String?           @db.Text
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([status])
+  @@index([email])
+}

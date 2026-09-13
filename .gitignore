@@ -1,0 +1,9 @@
+node_modules/
+.next/
+out/
+*.log
+
+# Secrets: database URL, Anthropic, Stripe, Resend keys. Never commit these.
+.env
+.env.local
+.env*.local
