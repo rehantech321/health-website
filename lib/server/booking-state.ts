@@ -1,18 +1,18 @@
 import crypto from 'crypto';
 import prisma from './db';
-import { sendBookingConfirmation, sendVoucherConfirmation } from './mail';
+import { sendBookingConfirmation, sendVoucherConfirmation, sendClinicianBriefing } from './mail';
 
 // State transitions shared by the Stripe webhook and the mock checkout, so a
 // mock payment lands in exactly the same state a real one does.
 
 /// Marks a payment paid and confirms whatever it was for. Idempotent.
-export async function confirmPayment(paymentId: string | null | undefined, providerRef?: string | null) {
+export async function confirmPayment(paymentId: string | null | undefined, providerRef?: string | null, siteUrl = '') {
   if (!paymentId) return;
 
   const payment = await prisma.payment.findUnique({
     where: { id: paymentId },
     include: {
-      appointment: { include: { patient: true, clinician: true } },
+      appointment: { include: { patient: true, clinician: true, intakeSession: { include: { summary: true } } } },
       voucher: { include: { patient: true } },
     },
   });
@@ -38,6 +38,14 @@ export async function confirmPayment(paymentId: string | null | undefined, provi
     // emailed when they do; until then the profile says it is on its way.
     await prisma.appointment.update({ where: { id: a.id }, data: { status: 'CONFIRMED' } });
     await sendBookingConfirmation(a).catch((e) => console.error('[mail] booking confirmation failed:', e));
+    // The doctor gets the briefing the moment the booking is real - not when
+    // they happen to open the portal.
+    await sendClinicianBriefing({
+      appointment: a,
+      summary: a.intakeSession?.summary ?? null,
+      concern: a.intakeSession?.concern ?? null,
+      siteUrl: siteUrl || process.env.NEXT_PUBLIC_SITE_URL || '',
+    }).catch((e) => console.error('[mail] clinician briefing failed:', e));
   }
 
   if (payment.voucher) {

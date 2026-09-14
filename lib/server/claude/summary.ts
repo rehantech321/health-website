@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
-import { getClient, isLive, BASE_PARAMS, EFFORT, MODEL, MOCK_MODEL, describeError } from '../anthropic';
+import { getClient, isLive, BASE_PARAMS, EFFORT_SUMMARY, MODEL, MOCK_MODEL, describeError } from '../anthropic';
 import type { Question, Answers } from './intake';
 
 // Turns a completed intake into the briefing the clinician reads before the
@@ -92,7 +92,7 @@ export async function generateSummary(args: {
       ...BASE_PARAMS,
       system: SYSTEM,
       messages: [{ role: 'user', content }],
-      output_config: { effort: EFFORT, format: zodOutputFormat(SummarySchema) },
+      output_config: { effort: EFFORT_SUMMARY, format: zodOutputFormat(SummarySchema) },
     });
 
     if (response.stop_reason === 'refusal' || !response.parsed_output) return fallback();

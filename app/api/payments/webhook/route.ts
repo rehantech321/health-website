@@ -2,7 +2,7 @@ import prisma from '@/lib/server/db';
 import { constructEvent } from '@/lib/server/payments';
 import { confirmPayment, failPayment } from '@/lib/server/booking-state';
 import { recordPromoUse } from '@/lib/server/promo';
-import { json, fail } from '@/lib/server/http';
+import { json, fail, siteUrl } from '@/lib/server/http';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,14 +35,14 @@ export async function POST(req: Request) {
         // Klarna and other delayed methods can complete the session while
         // funds are still pending; only `paid` is money.
         if (session.payment_status === 'paid') {
-          await confirmPayment(paymentId, session.payment_intent || session.id);
+          await confirmPayment(paymentId, session.payment_intent || session.id, siteUrl(req));
           await bumpPromo(paymentId);
         } else {
           await prisma.payment.updateMany({ where: { id: paymentId }, data: { status: 'PROCESSING' } });
         }
         break;
       case 'checkout.session.async_payment_succeeded':
-        await confirmPayment(paymentId, session.payment_intent || session.id);
+        await confirmPayment(paymentId, session.payment_intent || session.id, siteUrl(req));
         await bumpPromo(paymentId);
         break;
       case 'checkout.session.async_payment_failed':

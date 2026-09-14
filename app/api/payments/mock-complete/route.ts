@@ -1,6 +1,6 @@
 import prisma from '@/lib/server/db';
 import { requirePatient } from '@/lib/server/auth';
-import { json, fail, readJson, str, withErrors } from '@/lib/server/http';
+import { json, fail, readJson, str, siteUrl, withErrors } from '@/lib/server/http';
 import { isLive } from '@/lib/server/payments';
 import { confirmPayment, failPayment } from '@/lib/server/booking-state';
 import { recordPromoUse } from '@/lib/server/promo';
@@ -31,7 +31,7 @@ export const POST = withErrors(async (req: Request) =>
       return json({ status: 'FAILED', reference });
     }
 
-    await confirmPayment(payment.id, `mock_pi_${payment.id}`);
+    await confirmPayment(payment.id, `mock_pi_${payment.id}`, siteUrl(req));
     if (payment.appointment?.promoCode) await recordPromoUse(payment.appointment.promoCode);
     return json({ status: 'PAID', reference });
   })

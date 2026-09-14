@@ -1611,8 +1611,9 @@ export const SHARED_BODY_HTML: string = `
           </div>
         </div>
         <div class="finder-row">
-          <label for="qNotes">Anything else your clinician should know (optional)</label>
-          <textarea id="qNotes" rows="2" placeholder="Medical history, current medication, or context that would help"></textarea>
+          <label for="qNotes">In your own words, what has been going on?</label>
+          <textarea id="qNotes" rows="3" placeholder="For example: I've struggled to focus and finish tasks for years, and it's affecting my job. A sentence or two is enough - we'll ask a few follow-up questions next."></textarea>
+          <p class="qhelp">Your clinician reads this, and your answers to the next few questions, before you meet.</p>
         </div>
         <div class="screen-q">
           <div class="qtext">Right now, are you having any thoughts of harming yourself or someone else?</div>
@@ -1625,7 +1626,19 @@ export const SHARED_BODY_HTML: string = `
           <h4>Please reach out for immediate support</h4>
           <p>Eldava Health assessments are not an emergency service and cannot respond in real time. If you are in danger right now, call your local emergency number. In the UK you can call 999, or Samaritans free on 116 123, any time. In the US and Canada, call or text 988. Booking is paused so you can get the right help first.</p>
         </div>
+        <div class="form-error" id="step0Error" hidden></div>
         <div class="modal-actions"><span></span><button class="btn btn-primary" id="step0NextBtn" onclick="Eldava.bookingNext(1)">Continue</button></div>
+      </div>
+
+      <div id="bookStepAI" hidden>
+        <div class="ai-intro" id="bookAiIntro"></div>
+        <div id="bookAiQuestions"></div>
+        <div class="crisis-box" id="bookAiCrisis" hidden>
+          <h4>Please reach out for immediate support</h4>
+          <p>Eldava Health assessments are not an emergency service and cannot respond in real time. If you are in danger right now, call your local emergency number. In the UK you can call 999, or Samaritans free on 116 123, any time. In the US and Canada, call or text 988. Booking is paused so you can get the right help first.</p>
+        </div>
+        <div class="form-error" id="bookAiError" hidden></div>
+        <div class="modal-actions"><button class="btn btn-ghost" onclick="Eldava.bookingBack(0)">Back</button><button class="btn btn-primary" id="bookAiBtn" onclick="Eldava.bookingIntakeNext()">Continue</button></div>
       </div>
 
       <div id="bookStep1" hidden>

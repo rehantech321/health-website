@@ -74,6 +74,76 @@ export async function sendBookingConfirmation(a: Appointment & { patient: Patien
   });
 }
 
+/// The clinician's briefing, sent the moment a booking is paid for. Carries
+/// the AI summary and every verbatim answer so the doctor can prepare from
+/// their inbox; the portal has the same, plus the notes editor.
+export async function sendClinicianBriefing(args: {
+  appointment: Appointment & { patient: Patient; clinician: Clinician };
+  summary: { presentingComplaint: string; historySummary: string; suggestedFocus: unknown; riskFlags: unknown; riskLevel: string; answerDigest: unknown; model: string } | null;
+  concern: string | null;
+  siteUrl: string;
+}) {
+  const a = args.appointment;
+  const s = args.summary;
+  const list = (v: unknown) => (Array.isArray(v) ? v.map((x) => `  - ${x}`).join('\n') : '  (none)');
+  const digest = (v: unknown) =>
+    Array.isArray(v) ? v.map((d: any) => `  Q: ${d.question}\n  A: ${d.answer}`).join('\n\n') : '  (no structured answers)';
+  const urgent = s?.riskLevel === 'urgent';
+
+  return sendMail({
+    to: a.clinician.email,
+    subject: `${urgent ? '[URGENT] ' : ''}New booking: ${a.patient.fullName} - ${a.serviceName} - ${when(a.startsAt)}`,
+    text: [
+      `${a.clinician.displayName},`,
+      '',
+      `A new ${a.mode} appointment has been confirmed with you.`,
+      '',
+      `Patient:    ${a.patient.fullName}`,
+      `Service:    ${a.serviceName}`,
+      `When:       ${when(a.startsAt)} (UK time), ${a.durationMin} min`,
+      `Reference:  ${a.reference}`,
+      `Portal:     ${args.siteUrl}/clinician/portal/`,
+      a.mode === 'video' ? 'Action:     add your video link for this appointment in the portal.' : `Action:     you call the patient${a.patient.phone ? ` on ${a.patient.phone}` : ' (no number on file - contact them by email)'}.`,
+      '',
+      '----------------------------------------------------------------',
+      s ? `PRE-CONSULTATION SUMMARY   (risk level: ${s.riskLevel.toUpperCase()})` : 'PRE-CONSULTATION SUMMARY',
+      '----------------------------------------------------------------',
+      s
+        ? [
+            '',
+            'Presenting complaint',
+            `  ${s.presentingComplaint}`,
+            '',
+            'History',
+            `  ${s.historySummary}`,
+            '',
+            'Suggested areas to explore',
+            list(s.suggestedFocus),
+            '',
+            'Risk flags',
+            list(s.riskFlags),
+            '',
+            s.model === 'mock-no-api-key'
+              ? 'Note: no AI model was configured - the above is built from the patient\'s verbatim answers only.'
+              : `Written by ${s.model} from the patient's intake answers. A prompt for your own assessment, not a clinical finding.`,
+            '',
+            "In the patient's own words",
+            `  "${args.concern ?? ''}"`,
+            '',
+            'What the patient answered',
+            digest(s.answerDigest),
+          ].join('\n')
+        : [
+            '',
+            'This patient booked without completing the guided intake, so there is no summary.',
+            args.concern ? `\nIn their own words:\n  "${args.concern}"` : '',
+          ].join('\n'),
+      '',
+      'Eldava Health',
+    ].join('\n'),
+  });
+}
+
 export async function sendJoinLink(a: Appointment & { patient: Patient; clinicianName: string; changed: boolean }) {
   return sendMail({
     to: a.patient.email,

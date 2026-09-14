@@ -1049,12 +1049,13 @@
     ['cps0','cps1','cps2','cps3','cps4'].forEach(function(id,i){ var el = document.getElementById(id); if(el) el.className = step>=i?'done':''; });
   }
   function bookingShow(step){
+    var ai = document.getElementById('bookStepAI'); if(ai) ai.hidden = true;
     ['bookStep0','bookStep1','bookStep2','bookStep3','bookStep4'].forEach(function(id,i){ document.getElementById(id).hidden = i!==step; });
     ['ms0','ms1','ms2','ms3'].forEach(function(id,i){ var el = document.getElementById(id); if(el) el.className = step>=i?'done':''; });
   }
 
-  function renderIntakeIntro(intro, aiGenerated){
-    var el = document.getElementById('cpAiIntro'); if(!el) return;
+  function renderIntakeIntro(intro, aiGenerated, introId){
+    var el = document.getElementById(introId || 'cpAiIntro'); if(!el) return;
     el.innerHTML = '<span class="cp-tag">'+(aiGenerated ? 'Tailored to what you told us' : 'Standard intake questions')+'</span>'
       + '<p class="sub" style="margin-top:6px;">'+esc(intro || '')+'</p>'
       + (aiGenerated ? '' : '<p class="cp-degraded">Our question assistant is unavailable right now, so these are our standard intake questions. Your clinician still sees every answer.</p>');
@@ -1078,15 +1079,15 @@
     }
     return html + '</div>';
   }
-  function renderIntakeQuestions(questions){ var el = document.getElementById('cpAiQuestions'); if(el) el.innerHTML = questions.map(questionHtml).join(''); }
-  function appendIntakeQuestions(questions, intro){
-    var el = document.getElementById('cpAiQuestions'); if(!el) return;
+  function renderIntakeQuestions(questions, containerId){ var el = document.getElementById(containerId || 'cpAiQuestions'); if(el) el.innerHTML = questions.map(questionHtml).join(''); }
+  function appendIntakeQuestions(questions, intro, containerId){
+    var el = document.getElementById(containerId || 'cpAiQuestions'); if(!el) return;
     el.insertAdjacentHTML('beforeend', '<div class="intake-followup"><span class="cp-tag">A few follow-ups</span>'+(intro ? '<p class="sub" style="margin-top:6px;">'+esc(intro)+'</p>' : '')+'</div>'+questions.map(questionHtml).join(''));
     var first = el.querySelector('.intake-followup'); if(first) first.scrollIntoView({ behavior:'smooth', block:'center' });
   }
-  function collectIntakeAnswers(){
+  function collectIntakeAnswers(containerId){
     var answers = {}, missing = [];
-    document.querySelectorAll('#cpAiQuestions .intake-q').forEach(function(block){
+    document.querySelectorAll('#' + (containerId || 'cpAiQuestions') + ' .intake-q').forEach(function(block){
       var id = block.getAttribute('data-qid'), type = block.getAttribute('data-type'), required = block.getAttribute('data-required') === '1', value;
       if(type === 'text'){ var input = block.querySelector('.intake-input'); value = input ? input.value.trim() : ''; }
       else if(type === 'multi_select'){ value = Array.prototype.map.call(block.querySelectorAll('.radio-opt.selected'), function(o){ return o.getAttribute('data-val'); }); }
@@ -1097,9 +1098,9 @@
     });
     return { answers: answers, missing: missing };
   }
-  function highlightMissing(ids){
+  function highlightMissing(ids, containerId){
     var first = null;
-    document.querySelectorAll('#cpAiQuestions .intake-q').forEach(function(block){
+    document.querySelectorAll('#' + (containerId || 'cpAiQuestions') + ' .intake-q').forEach(function(block){
       var isMissing = ids.indexOf(block.getAttribute('data-qid')) !== -1;
       block.classList.toggle('missing', isMissing);
       if(isMissing && !first) first = block;
@@ -1390,8 +1391,12 @@
       if(!patientAccount){ pendingAction = 'booking'; pendingArgs = serviceName; Eldava.go('register'); return; }
       var svc = findService(serviceName || state.service);
       state.service = svc.name; state.price = svc.price; state.safetyFlag = false; state.payMode='full';
-      booking.slotId = null; booking.appointmentId = null; booking.voucherId = null; booking.reference = null; booking.promo = null;
+      // A fresh booking starts with no intake attached; the guided flow sets
+      // booking.intakeId AFTER calling this, so a stale one from an earlier
+      // booking can never be reused here.
+      booking.slotId = null; booking.appointmentId = null; booking.voucherId = null; booking.reference = null; booking.promo = null; booking.intakeId = null;
       booking.isVoucher = svc.cat === 'founding';
+      showError('step0Error', '');
       document.getElementById('mService').value = svc.name;
       Eldava.updateSummary();
       Eldava.setPayMode('full');
@@ -1436,6 +1441,69 @@
       document.getElementById('bnplBreakdown').classList.toggle('on', mode==='three');
       var btn = document.getElementById('payNowBtn');
       if(btn){ btn.textContent = mode==='three' ? 'Continue to Klarna' : 'Continue to secure payment'; btn.setAttribute('data-label', btn.textContent); }
+    },
+    /// Step between "what's going on" and choosing a time: the AI asks its
+    /// structured questions inside the booking modal.
+    bookingStartIntake: function(){
+      var concern = (document.getElementById('qNotes').value || '').trim();
+      showError('step0Error', '');
+      if(concern.length < 10){
+        showError('step0Error', 'Please tell us, in a sentence or two, what has been going on - your clinician reads this before you meet.');
+        document.getElementById('qNotes').focus();
+        return;
+      }
+      intake = { id:null, questions:[], answers:{}, redFlag:false, aiGenerated:false };
+      setBusy('step0NextBtn', true, 'Preparing your questions…');
+      apiCall('POST', '/api/intake/start', { specialty: state.service, concern: concern }).then(function(res){
+        setBusy('step0NextBtn', false);
+        if(!res.ok){
+          if(res.status === 401){ pendingAction='booking'; pendingArgs=state.service; Eldava.closeBooking(); Eldava.go('register'); return; }
+          showError('step0Error', res.data.error || 'Could not prepare your questions. Please try again.');
+          return;
+        }
+        intake.id = res.data.intakeId; intake.questions = res.data.questions || []; intake.aiGenerated = res.data.aiGenerated;
+        renderIntakeIntro(res.data.intro, res.data.aiGenerated, 'bookAiIntro');
+        renderIntakeQuestions(intake.questions, 'bookAiQuestions');
+        showError('bookAiError', ''); toggleHidden('bookAiCrisis', true); toggleHidden('bookAiBtn', false);
+        bookingShow(0); document.getElementById('bookStep0').hidden = true;
+        document.getElementById('bookStepAI').hidden = false;
+        var modal = document.querySelector('#bookingOverlay .modal'); if(modal) modal.scrollTop = 0;
+      });
+    },
+    /// Submits the intake answers. Follow-ups append in place; a safety
+    /// disclosure stops the booking with crisis signposting; otherwise the
+    /// intake is completed (which writes the clinician's summary) and the
+    /// patient moves on to choose a time.
+    bookingIntakeNext: function(){
+      var collected = collectIntakeAnswers('bookAiQuestions');
+      showError('bookAiError', '');
+      if(collected.missing.length){ showError('bookAiError', 'Please answer every required question before continuing.'); highlightMissing(collected.missing, 'bookAiQuestions'); return; }
+      setBusy('bookAiBtn', true, 'Saving your answers…');
+      apiCall('POST', '/api/intake/answer', { intakeId: intake.id, answers: collected.answers }).then(function(res){
+        if(!res.ok){ setBusy('bookAiBtn', false); showError('bookAiError', res.data.error || 'Could not save your answers.'); return; }
+        intake.answers = collected.answers; intake.redFlag = res.data.redFlag;
+
+        if(!res.data.done && (res.data.questions || []).length){
+          setBusy('bookAiBtn', false);
+          intake.questions = intake.questions.concat(res.data.questions);
+          appendIntakeQuestions(res.data.questions, res.data.intro, 'bookAiQuestions');
+          return;
+        }
+        if(intake.redFlag){
+          setBusy('bookAiBtn', false);
+          toggleHidden('bookAiCrisis', false); toggleHidden('bookAiBtn', true);
+          document.getElementById('bookAiCrisis').scrollIntoView({ behavior:'smooth', block:'center' });
+          return;
+        }
+        setBusy('bookAiBtn', true, 'Preparing your clinician’s summary…');
+        apiCall('POST', '/api/intake/complete', { intakeId: intake.id }).then(function(done){
+          setBusy('bookAiBtn', false);
+          if(!done.ok){ showError('bookAiError', done.data.error || 'Could not complete your questions.'); return; }
+          booking.intakeId = intake.id;
+          bookingShow(1);
+          Eldava.loadSlots();
+        });
+      });
     },
     /// Fetches live availability for the selected service.
     loadSlots: function(){
@@ -1505,6 +1573,13 @@
         // Founding vouchers are prepaid and redeemed later - there is no slot
         // to choose, so skip straight to details.
         if(booking.isVoucher){ bookingShow(2); return; }
+
+        // Every consultation booking goes through the AI intake before a time
+        // is chosen, so the clinician always receives a summary. If the
+        // patient arrived from the guided flow the intake is already complete
+        // and this is skipped.
+        if(!booking.intakeId){ Eldava.bookingStartIntake(); return; }
+
         bookingShow(1);
         Eldava.loadSlots();
         return;
@@ -2047,10 +2122,11 @@
     },
     cpContinueToBooking: function(){
       Eldava.closeCarePathway();
-      // Carries the intake into the booking, which links the clinician's
-      // briefing to the appointment they will see it under.
-      booking.intakeId = intake.id;
       Eldava.openBooking(cp.specialty);
+      // Carries the completed intake into the booking (set after openBooking,
+      // which resets it), so the booking skips its own intake step and the
+      // clinician's briefing is linked to the appointment they see it under.
+      booking.intakeId = intake.id;
       if(cp.concern){ document.getElementById('qNotes').value = cp.concern; }
       if(intake.redFlag || cp.selfHarmFlagFromScreener){ document.getElementById('qSafety').querySelector('[data-val="yes"]').click(); }
     }

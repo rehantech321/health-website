@@ -28,7 +28,14 @@ export const BASE_PARAMS = {
   thinking: { type: 'adaptive' as const },
 };
 
-export const EFFORT = 'high' as const;
+/// Effort per task. Question generation is something a patient sits and
+/// waits for. Measured on the same ADHD intake: high 27s, medium 21s, low 18s,
+/// with the questions equally well tailored at every level - the time is
+/// dominated by writing ~9 structured questions, not by reasoning. So it runs
+/// at low. The clinician summary keeps high: it is written once and clinical
+/// care is worth the extra reasoning.
+export const EFFORT_QUESTIONS = 'low' as const;
+export const EFFORT_SUMMARY = 'high' as const;
 
 /// Normalises SDK errors into something an API route can safely return.
 export function describeError(error: unknown): string {

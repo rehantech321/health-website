@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import type { Patient, Clinician } from '@prisma/client';
 import prisma from './db';
 import { fail } from './http';
@@ -48,11 +48,26 @@ function hashToken(token: string) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
+/// Whether this request arrived over HTTPS. Behind Nginx the app sees plain
+/// HTTP, so the proxy's X-Forwarded-Proto header is the truth; without a
+/// proxy, fall back to the request's own protocol.
+function requestIsHttps(): boolean {
+  const h = headers();
+  const forwarded = h.get('x-forwarded-proto');
+  if (forwarded) return forwarded.split(',')[0].trim() === 'https';
+  const origin = h.get('origin') || h.get('referer') || '';
+  return origin.startsWith('https://');
+}
+
 function cookieOptions(maxAge: number) {
   return {
     httpOnly: true,
     sameSite: 'lax' as const,
-    secure: process.env.NODE_ENV === 'production',
+    // Secure must follow the real protocol, not NODE_ENV. A Secure cookie set
+    // over plain http is discarded by the browser, so a production box that
+    // is not yet behind TLS would accept every login and then 401 the very
+    // next request. Over https this is still always Secure.
+    secure: requestIsHttps(),
     path: '/',
     maxAge,
   };

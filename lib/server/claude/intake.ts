@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
-import { getClient, isLive, BASE_PARAMS, EFFORT, MODEL, MOCK_MODEL, describeError } from '../anthropic';
+import { getClient, isLive, BASE_PARAMS, EFFORT_QUESTIONS, MODEL, MOCK_MODEL, describeError } from '../anthropic';
 
 // Claude generates the structured triage question set the patient answers
 // before booking. It asks questions; it never diagnoses, never suggests
@@ -76,7 +76,7 @@ export async function generateQuestions(args: {
       ...BASE_PARAMS,
       system: SYSTEM,
       messages: [{ role: 'user', content: userPrompt(args.specialty, args.concern, prior) }],
-      output_config: { effort: EFFORT, format: zodOutputFormat(QuestionSetSchema) },
+      output_config: { effort: EFFORT_QUESTIONS, format: zodOutputFormat(QuestionSetSchema) },
     });
 
     if (response.stop_reason === 'refusal') {
