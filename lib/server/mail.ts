@@ -1,26 +1,79 @@
 import type { Appointment, Patient, Clinician, Voucher } from '@prisma/client';
+import nodemailer, { type Transporter } from 'nodemailer';
 import { formatMinor } from './services';
 
-// Outbound email through Resend's REST API - plain fetch, no SDK. With no
-// RESEND_API_KEY the message is logged to the server console instead of sent;
-// every caller also persists what it needed to, so nothing is lost either way.
+// Outbound email. Three transports, chosen by which env vars exist:
+//   1. SMTP  - SMTP_HOST/SMTP_USER/SMTP_PASS. This is the Namecheap Private
+//              Email mailbox (mail.privateemail.com): mail goes out from the
+//              real telehealth@eldava.com address, signed by the DKIM/SPF the
+//              domain already has, which is what keeps it out of spam.
+//   2. Resend - RESEND_API_KEY, if you would rather use an API provider.
+//   3. Console - neither set: the message is logged, not sent. Every caller
+//              also persists what it needed to, so nothing is lost.
 
-export function isLive(): boolean {
-  return Boolean(process.env.RESEND_API_KEY);
+type Transport = 'smtp' | 'resend' | 'console';
+
+export function transport(): Transport {
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) return 'smtp';
+  if (process.env.RESEND_API_KEY) return 'resend';
+  return 'console';
 }
 
-const FROM = () => process.env.MAIL_FROM || 'Eldava Health <care@eldava.com>';
+export function isLive(): boolean {
+  return transport() !== 'console';
+}
+
+/// The From address must be the mailbox we authenticate as (or one of its
+/// aliases), or the receiving server rejects it as spoofed.
+const FROM = () => process.env.MAIL_FROM || process.env.SMTP_USER || 'Eldava Health <care@eldava.com>';
+
+/// Operational notifications (new bookings etc.) go here. Defaults to the
+/// sending mailbox, so with Namecheap that is telehealth@eldava.com.
+export const ADMIN_EMAIL = () => process.env.ADMIN_EMAIL || process.env.SMTP_USER || 'care@eldava.com';
+
+let smtp: Transporter | null = null;
+function smtpTransport(): Transporter {
+  if (!smtp) {
+    const port = Number(process.env.SMTP_PORT || 465);
+    smtp = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port,
+      // 465 is implicit TLS; 587 upgrades with STARTTLS. Namecheap supports both.
+      secure: port === 465,
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    });
+  }
+  return smtp;
+}
 
 type Mail = { to: string | string[]; subject: string; text: string; replyTo?: string };
 
 /// Returns true if the provider accepted the message, false if it was only
-/// logged (no key) or the provider rejected it.
+/// logged (no transport) or the provider rejected it.
 export async function sendMail(mail: Mail): Promise<boolean> {
   const to = Array.isArray(mail.to) ? mail.to : [mail.to];
+  const mode = transport();
 
-  if (!isLive()) {
+  if (mode === 'console') {
     console.log(`[mail:mock] to=${to.join(',')} subject="${mail.subject}"\n${mail.text}\n`);
     return false;
+  }
+
+  if (mode === 'smtp') {
+    try {
+      const info = await smtpTransport().sendMail({
+        from: FROM(),
+        to,
+        subject: mail.subject,
+        text: mail.text,
+        ...(mail.replyTo ? { replyTo: mail.replyTo } : {}),
+      });
+      console.log(`[mail:smtp] sent "${mail.subject}" to ${to.join(',')} (${info.messageId})`);
+      return true;
+    } catch (error: any) {
+      console.error(`[mail] SMTP rejected "${mail.subject}": ${error?.message || error}`);
+      return false;
+    }
   }
 
   const res = await fetch('https://api.resend.com/emails', {
@@ -68,6 +121,34 @@ export async function sendBookingConfirmation(a: Appointment & { patient: Patien
       '',
       'Your clinician will have read your intake answers before you meet.',
       'You can see this booking any time under My profile on the site.',
+      '',
+      'Eldava Health',
+    ].join('\n'),
+  });
+}
+
+/// Operational notice to the practice inbox. Deliberately carries booking
+/// facts only - who, what, when, with whom, how much - and none of the intake
+/// or summary. The clinical content is for the treating clinician; the admin
+/// mailbox does not need it and should not accumulate it.
+export async function sendAdminBookingNotice(a: Appointment & { patient: Patient; clinician: Clinician }, siteUrl: string) {
+  return sendMail({
+    to: ADMIN_EMAIL(),
+    replyTo: a.patient.email,
+    subject: `New booking ${a.reference}: ${a.serviceName} with ${a.clinician.displayName}`,
+    text: [
+      'A new appointment has been booked and paid for.',
+      '',
+      `Reference:  ${a.reference}`,
+      `Patient:    ${a.patient.fullName} <${a.patient.email}>${a.patient.phone ? `, ${a.patient.phone}` : ''}`,
+      `Service:    ${a.serviceName}`,
+      `Clinician:  ${a.clinician.displayName} <${a.clinician.email}>`,
+      `When:       ${when(a.startsAt)} (UK time), ${a.durationMin} min, ${a.mode}`,
+      `Paid:       ${formatMinor(a.priceMinor)}${a.promoCode ? ` (${a.promoCode} applied, list ${formatMinor(a.listMinor)})` : ''}`,
+      `Country:    ${a.patient.country}`,
+      '',
+      `The clinician has been sent the pre-consultation briefing and the patient their confirmation.`,
+      siteUrl ? `Portal: ${siteUrl}/clinician/portal/` : '',
       '',
       'Eldava Health',
     ].join('\n'),

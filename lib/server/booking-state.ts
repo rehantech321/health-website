@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import prisma from './db';
-import { sendBookingConfirmation, sendVoucherConfirmation, sendClinicianBriefing } from './mail';
+import { sendBookingConfirmation, sendVoucherConfirmation, sendClinicianBriefing, sendAdminBookingNotice } from './mail';
 
 // State transitions shared by the Stripe webhook and the mock checkout, so a
 // mock payment lands in exactly the same state a real one does.
@@ -37,15 +37,25 @@ export async function confirmPayment(paymentId: string | null | undefined, provi
     // clinician adds the real meeting link from the portal, and the patient is
     // emailed when they do; until then the profile says it is on its way.
     await prisma.appointment.update({ where: { id: a.id }, data: { status: 'CONFIRMED' } });
-    await sendBookingConfirmation(a).catch((e) => console.error('[mail] booking confirmation failed:', e));
-    // The doctor gets the briefing the moment the booking is real - not when
-    // they happen to open the portal.
-    await sendClinicianBriefing({
-      appointment: a,
-      summary: a.intakeSession?.summary ?? null,
-      concern: a.intakeSession?.concern ?? null,
-      siteUrl: siteUrl || process.env.NEXT_PUBLIC_SITE_URL || '',
-    }).catch((e) => console.error('[mail] clinician briefing failed:', e));
+    const base = siteUrl || process.env.NEXT_PUBLIC_SITE_URL || '';
+
+    // Three emails, sent concurrently, each failing independently: one
+    // mailbox bouncing must not stop the others. The booking is already
+    // CONFIRMED above regardless - email is notification, not state.
+    await Promise.allSettled([
+      sendBookingConfirmation(a),                                   // patient
+      sendClinicianBriefing({                                       // the treating doctor, with the intake summary
+        appointment: a,
+        summary: a.intakeSession?.summary ?? null,
+        concern: a.intakeSession?.concern ?? null,
+        siteUrl: base,
+      }),
+      sendAdminBookingNotice(a, base),                              // practice inbox, booking facts only
+    ]).then((results) =>
+      results.forEach((r, i) => {
+        if (r.status === 'rejected') console.error(`[mail] ${['patient confirmation', 'clinician briefing', 'admin notice'][i]} failed:`, r.reason);
+      })
+    );
   }
 
   if (payment.voucher) {
