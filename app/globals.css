@@ -621,10 +621,15 @@
   .intake-q .qhelp{color:var(--text-soft);font-size:0.83rem;margin:2px 0 8px;}
   .intake-q .optional{font-weight:400;font-size:0.78rem;color:var(--text-soft);}
   .intake-q.missing{border-left:3px solid #d9534f;padding-left:11px;margin-left:-14px;}
+  /* Intake options can be 5-6 long phrases: wrap them in a grid rather than the
+     single non-wrapping row used for short choices like Video / Phone. */
+  .intake-q .radio-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;}
+  .intake-q .radio-opt{flex:none;min-width:0;text-align:left;line-height:1.35;padding:11px 12px;overflow-wrap:anywhere;}
+  @media (max-width:480px){ .intake-q .radio-row{grid-template-columns:1fr 1fr;} .intake-q .radio-opt{font-size:0.84rem;} }
   .intake-input{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;resize:vertical;}
   .intake-input:focus{outline:none;border-color:var(--jade-deep);}
-  .scale-row{flex-wrap:wrap;gap:5px;}
-  .scale-opt{min-width:38px;justify-content:center;text-align:center;}
+  .intake-q .scale-row{display:flex;flex-wrap:wrap;gap:5px;}
+  .intake-q .scale-opt{min-width:38px;flex:1 0 38px;justify-content:center;text-align:center;padding:10px 6px;}
   .intake-followup{margin:22px 0 4px;padding-top:16px;border-top:1px solid var(--line);}
   .cp-verbatim{font-style:italic;color:var(--text-soft);border-left:3px solid var(--line);padding-left:12px;margin:8px 0 12px;}
   .cp-answers{display:grid;gap:8px;margin-top:8px;}
