@@ -87,7 +87,21 @@ async function main() {
   });
   console.log('  ELDAVA15: 15% off, first 2,000 uses.');
 
+  // The first admin account. Override with SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD;
+  // the password is only set when the account is first created, so re-running
+  // the seed never resets a password an admin has since changed.
+  console.log('Seeding admin…');
+  const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL || 'admin@eldava.com';
+  const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || 'eldava-admin-2026';
+  await prisma.admin.upsert({
+    where: { email: ADMIN_EMAIL },
+    update: {},
+    create: { email: ADMIN_EMAIL, name: 'Practice Admin', passwordHash: hashPassword(ADMIN_PASSWORD) },
+  });
+  console.log(`  ${ADMIN_EMAIL} ready.`);
+
   console.log('\nDone.');
+  console.log(`Admin panel sign-in:  ${ADMIN_EMAIL}  /  ${ADMIN_PASSWORD}   -> /admin/`);
   console.log('Clinician portal sign-in:');
   console.log(`  email:    ${CLINICIANS[0].email}  (or any address above)`);
   console.log(`  password: ${DEMO_PASSWORD}`);

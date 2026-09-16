@@ -1,0 +1,101 @@
+/* Admin panel. Deliberately its own visual system: a working tool, not the
+   marketing site. Light, dense, legible. Shares the brand's type and accent
+   so it still feels like Eldava. */
+.adm,.adm-login{--bg:#f4f1ea;--panel:#fff;--line:#e3dccb;--ink:#201a10;--soft:#6b6252;--accent:#a97a2c;--accent-deep:#6e4c1a;--ember:#9c3a24;--ok:#14624f;--warn:#8a6d1f;--bad:#a3231b;--nav:#181209;--nav-text:#f7eedd;--nav-soft:#bcab8f;}
+.adm{min-height:100vh;background:var(--bg);color:var(--ink);font-family:'Work Sans',ui-sans-serif,system-ui,sans-serif;font-size:14px;line-height:1.5;display:grid;grid-template-columns:232px 1fr;}
+.adm *{box-sizing:border-box}
+.adm a{color:inherit;text-decoration:none}
+.adm h1,.adm h2,.adm h3{font-family:'Fraunces',Georgia,serif;font-weight:600;margin:0;line-height:1.15}
+.adm h1{font-size:1.55rem} .adm h2{font-size:1.15rem} .adm h3{font-size:1rem}
+
+/* sidebar */
+.adm-side{background:var(--nav);color:var(--nav-text);padding:22px 16px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:6px}
+.adm-brand{display:flex;align-items:center;gap:10px;font-family:'Fraunces',serif;font-size:1.1rem;font-weight:600;padding:4px 8px 18px;border-bottom:1px solid rgba(247,238,221,.14);margin-bottom:12px}
+.adm-brand small{display:block;font-family:'IBM Plex Mono',monospace;font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:600}
+.adm-nav a{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;border-radius:6px;color:var(--nav-soft);font-weight:600;font-size:.88rem}
+.adm-nav a:hover{background:rgba(255,255,255,.06);color:var(--nav-text)}
+.adm-nav a.on{background:rgba(227,168,63,.14);color:#e3a83f}
+.adm-nav .sec{font-family:'IBM Plex Mono',monospace;font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:rgba(188,171,143,.6);padding:14px 10px 4px}
+.adm-pill{font-family:'IBM Plex Mono',monospace;font-size:.68rem;background:var(--ember);color:#fff;border-radius:999px;padding:1px 7px;min-width:20px;text-align:center}
+.adm-side .who{margin-top:auto;padding:12px 8px 0;border-top:1px solid rgba(247,238,221,.14);font-size:.82rem;color:var(--nav-soft)}
+.adm-side .who b{display:block;color:var(--nav-text)}
+.adm-side .who button{margin-top:8px;background:none;border:1px solid rgba(247,238,221,.25);color:var(--nav-text);border-radius:6px;padding:6px 10px;font:inherit;font-size:.8rem;cursor:pointer}
+
+/* main */
+.adm-main{padding:26px 32px 60px;min-width:0}
+.adm-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+.adm-head p{color:var(--soft);margin:4px 0 0}
+.adm-crumb{font-size:.8rem;color:var(--soft);margin-bottom:6px}
+.adm-crumb a{color:var(--accent-deep);font-weight:600}
+
+/* cards / stats */
+.adm-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:22px}
+.adm-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.adm-card .k{font-size:.74rem;text-transform:uppercase;letter-spacing:.06em;color:var(--soft);font-weight:600}
+.adm-card .v{font-family:'IBM Plex Mono',monospace;font-size:1.6rem;font-weight:600;margin-top:4px;color:var(--ink)}
+.adm-card .v.warn{color:var(--bad)}
+.adm-card .s{font-size:.78rem;color:var(--soft);margin-top:2px}
+.adm-card.attn{border-color:#f0c9c2;background:#fff7f5}
+.adm-panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-bottom:18px}
+.adm-panel > h2, .adm-panel > h3{margin-bottom:12px}
+.adm-grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px} @media(max-width:1100px){.adm-grid2{grid-template-columns:1fr}}
+
+/* toolbar */
+.adm-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.adm-tools input,.adm-tools select,.adm input,.adm select,.adm textarea{font:inherit;font-size:.88rem;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+/* globals.css gives every input/select width:100%; the toolbar is a row. */
+.adm-tools input,.adm-tools select{width:auto;flex:0 1 auto}
+.adm-tools input[type=search]{min-width:260px;flex:1 1 260px}
+.adm-tools input[type=checkbox]{width:auto;min-width:0;padding:0}
+.adm-tools .adm-check{white-space:nowrap}
+.adm input:focus,.adm select:focus,.adm textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(169,122,44,.15)}
+.adm textarea{width:100%;resize:vertical}
+
+/* buttons */
+.adm-btn{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:.82rem;font-weight:700;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,border-color .12s}
+.adm-btn:hover{border-color:var(--accent);background:#fffaf0}
+.adm-btn.primary{background:var(--accent-deep);border-color:var(--accent-deep);color:#fff} .adm-btn.primary:hover{background:#5a3d14}
+.adm-btn.danger{color:var(--bad);border-color:#f0c9c2} .adm-btn.danger:hover{background:#fdecea}
+.adm-btn.ok{color:var(--ok);border-color:#b7e0cb} .adm-btn.ok:hover{background:#eaf6f0}
+.adm-btn.sm{padding:5px 10px;font-size:.76rem}
+.adm-btn:disabled{opacity:.55;cursor:default}
+
+/* table */
+.adm-table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.adm-table th,.adm-table td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle;font-size:.86rem}
+.adm-table th{font-family:'IBM Plex Mono',monospace;font-size:.66rem;letter-spacing:.08em;text-transform:uppercase;color:var(--soft);background:#faf7f0;font-weight:600}
+.adm-table tr:last-child td{border-bottom:none}
+.adm-table tr.row:hover td{background:#fffaf0;cursor:pointer}
+.adm-table td.num,.adm-table th.num{text-align:right;font-family:'IBM Plex Mono',monospace}
+.adm .sub{display:block;font-size:.76rem;color:var(--soft);font-weight:400}
+.adm-wrap{overflow-x:auto}
+.adm-empty{padding:28px;text-align:center;color:var(--soft)}
+
+/* badges */
+.adm-badge{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:.64rem;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:3px 8px;white-space:nowrap;background:#ece7db;color:var(--soft)}
+.adm-badge.ok{background:#dff2e8;color:var(--ok)} .adm-badge.warn{background:#fdf4dc;color:var(--warn)} .adm-badge.bad{background:#fdecea;color:var(--bad)} .adm-badge.info{background:#e6e9f0;color:#41506b} .adm-badge.accent{background:#f5e6c8;color:var(--accent-deep)}
+
+/* details */
+.adm-dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 18px;margin:0;font-size:.88rem}
+.adm-dl dt{color:var(--soft)} .adm-dl dd{margin:0;font-weight:600;word-break:break-word}
+.adm-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.adm-form label{display:block;font-size:.76rem;font-weight:600;color:var(--soft);margin-bottom:4px}
+.adm-form input,.adm-form select{width:100%}
+.adm-form .full{grid-column:1/-1}
+.adm-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center}
+.adm-msg{font-size:.84rem;margin-top:10px;padding:9px 12px;border-radius:8px}
+.adm-msg.ok{background:#dff2e8;color:var(--ok)} .adm-msg.bad{background:#fdecea;color:var(--bad)}
+.adm-pager{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:12px;font-size:.82rem;color:var(--soft)}
+.adm-quote{font-style:italic;color:var(--soft);border-left:3px solid var(--line);padding-left:12px;margin:8px 0}
+.adm-qa{display:grid;gap:6px} .adm-qa div{background:#faf7f0;border-radius:8px;padding:8px 10px} .adm-qa .q{font-size:.76rem;color:var(--soft)} .adm-qa .a{font-weight:600;font-size:.86rem}
+.adm-alert{background:#fdecea;border:1px solid #f0c9c2;color:var(--bad);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-weight:600}
+.adm-check{display:inline-flex;align-items:center;gap:6px;font-size:.84rem;margin-right:12px}
+
+/* login */
+.adm-login{min-height:100vh;display:grid;place-items:center;background:var(--nav);padding:20px}
+.adm-login form{background:var(--panel);border-radius:14px;padding:30px 32px;width:min(400px,100%);box-shadow:0 30px 60px -20px rgba(0,0,0,.6)}
+.adm-login form label{display:block;font-size:.78rem;font-weight:600;color:var(--soft);margin:14px 0 4px}
+.adm-login form input{width:100%}
+.adm-login .adm-btn{width:100%;justify-content:center;margin-top:18px}
+
+@media(max-width:860px){.adm{grid-template-columns:1fr}.adm-side{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;gap:4px;padding:12px}.adm-brand{border:none;padding:4px 8px;margin:0}.adm-nav{display:flex;flex-wrap:wrap;gap:2px}.adm-nav .sec{display:none}.adm-side .who{margin:0 0 0 auto;border:none;padding:0}.adm-main{padding:18px}}

@@ -14,6 +14,11 @@ import { formatMinor } from './services';
 type Transport = 'smtp' | 'resend' | 'console';
 
 export function transport(): Transport {
+  // A developer's machine must never email real patients or clinicians: a test
+  // booking on localhost would otherwise send a live doctor a fake briefing
+  // with a localhost link in it. In development, mail is logged unless
+  // explicitly opted in with MAIL_ALLOW_DEV=true.
+  if (process.env.NODE_ENV !== 'production' && process.env.MAIL_ALLOW_DEV !== 'true') return 'console';
   if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) return 'smtp';
   if (process.env.RESEND_API_KEY) return 'resend';
   return 'console';
@@ -223,6 +228,67 @@ export async function sendClinicianBriefing(args: {
       'Eldava Health',
     ].join('\n'),
   });
+}
+
+/// Applicant hears the outcome of their clinician application.
+export async function sendApplicationDecision(args: { email: string; fullName: string; approved: boolean; notes?: string | null; siteUrl: string }) {
+  const first = args.fullName.split(' ')[0];
+  return sendMail({
+    to: args.email,
+    subject: args.approved ? 'Your Eldava Health clinician account is approved' : 'Your Eldava Health application',
+    text: args.approved
+      ? [
+          `Hello ${first},`,
+          '',
+          'Your application to join the Eldava Health clinician network has been approved and your portal account is now active.',
+          '',
+          `Sign in:   ${args.siteUrl}/clinician/sign-in/`,
+          `Email:     ${args.email}`,
+          'Password:  the one you chose when you applied',
+          '',
+          'Once signed in, add a short bio under My profile - patients see it when choosing an appointment time - and the clinical team will publish your availability.',
+          '',
+          'Welcome aboard.',
+          'Eldava Health',
+        ].join('\n')
+      : [
+          `Hello ${first},`,
+          '',
+          'Thank you for applying to join the Eldava Health clinician network. After review we are not able to offer you a place at this time.',
+          args.notes ? `\n${args.notes}\n` : '',
+          'You are welcome to reapply in future. If you believe this decision was made in error, reply to this email.',
+          '',
+          'Eldava Health',
+        ].join('\n'),
+  });
+}
+
+/// Both parties hear when an appointment is cancelled by the practice.
+export async function sendCancellation(a: Appointment & { patient: Patient; clinician: Clinician }, reason: string) {
+  const line = `${a.serviceName} on ${when(a.startsAt)} (ref ${a.reference})`;
+  const results = await Promise.allSettled([
+    sendMail({
+      to: a.patient.email,
+      subject: `Your appointment has been cancelled - ${a.reference}`,
+      text: [
+        `Hello ${a.patient.fullName.split(' ')[0]},`,
+        '',
+        `We are sorry: your ${line} has been cancelled.`,
+        reason ? `\nReason: ${reason}` : '',
+        '',
+        a.status === 'CONFIRMED' ? 'Any payment you made will be refunded to your original payment method.' : '',
+        'To rebook, sign in and choose a new time, or reply to this email and we will help.',
+        '',
+        'Eldava Health',
+      ].join('\n'),
+    }),
+    sendMail({
+      to: a.clinician.email,
+      subject: `Cancelled: ${a.patient.fullName} - ${a.reference}`,
+      text: [`${a.clinician.displayName},`, '', `The ${line} with ${a.patient.fullName} has been cancelled by the practice.`, reason ? `Reason: ${reason}` : '', '', 'The slot has been released.', '', 'Eldava Health'].join('\n'),
+    }),
+  ]);
+  return results.every((r) => r.status === 'fulfilled' && r.value);
 }
 
 export async function sendJoinLink(a: Appointment & { patient: Patient; clinicianName: string; changed: boolean }) {

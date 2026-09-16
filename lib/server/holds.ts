@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import prisma from './db';
 
 // A booking holds its slot from the moment it is created, before payment. That
@@ -14,30 +15,32 @@ function expiryCutoff() {
   return new Date(Date.now() - HOLD_MINUTES * 60 * 1000);
 }
 
-/// Releases expired holds. Cheap - one updateMany per table - so it is called
-/// at the start of every slot lookup and every booking attempt rather than on
-/// a schedule, which keeps the app free of background jobs.
+/// Releases expired holds. Called at the start of every slot lookup and every
+/// booking attempt rather than on a schedule, which keeps the app free of
+/// background jobs - so it has to be cheap. Both tables are updated in one
+/// statement (a pair of data-modifying CTEs): a single round trip to the
+/// database, which is remote and costs hundreds of milliseconds per trip.
 export async function releaseExpiredHolds(): Promise<{ appointments: number; vouchers: number }> {
   const cutoff = expiryCutoff();
 
-  const appointments = await prisma.appointment.updateMany({
-    where: {
-      status: 'PENDING_PAYMENT',
-      createdAt: { lt: cutoff },
-      OR: [{ payment: null }, { payment: { status: { in: ['REQUIRES_PAYMENT', 'FAILED'] } } }],
-    },
-    // slotId -> null is what actually frees the slot for someone else.
-    data: { status: 'EXPIRED', slotId: null },
-  });
+  const [row] = await prisma.$queryRaw<{ appointments: bigint; vouchers: bigint }[]>(Prisma.sql`
+    with a as (
+      update "Appointment" ap
+      -- slotId -> null is what actually frees the slot for someone else.
+      set "status" = 'EXPIRED', "slotId" = null, "updatedAt" = now()
+      where ap."status" = 'PENDING_PAYMENT' and ap."createdAt" < ${cutoff}
+        and not exists (select 1 from "Payment" p where p."appointmentId" = ap."id" and p."status" not in ('REQUIRES_PAYMENT','FAILED'))
+      returning 1
+    ),
+    v as (
+      update "Voucher" vo
+      set "status" = 'EXPIRED', "updatedAt" = now()
+      where vo."status" = 'PENDING_PAYMENT' and vo."createdAt" < ${cutoff}
+        and not exists (select 1 from "Payment" p where p."voucherId" = vo."id" and p."status" not in ('REQUIRES_PAYMENT','FAILED'))
+      returning 1
+    )
+    select (select count(*) from a) as "appointments", (select count(*) from v) as "vouchers"
+  `);
 
-  const vouchers = await prisma.voucher.updateMany({
-    where: {
-      status: 'PENDING_PAYMENT',
-      createdAt: { lt: cutoff },
-      OR: [{ payment: null }, { payment: { status: { in: ['REQUIRES_PAYMENT', 'FAILED'] } } }],
-    },
-    data: { status: 'EXPIRED' },
-  });
-
-  return { appointments: appointments.count, vouchers: vouchers.count };
+  return { appointments: Number(row?.appointments ?? 0), vouchers: Number(row?.vouchers ?? 0) };
 }

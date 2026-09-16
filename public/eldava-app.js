@@ -1,4 +1,7 @@
 (function(){
+  // The admin panel (/admin) is a separate React app under the same root
+  // layout and has none of the site shell; nothing below applies there.
+  if(!document.getElementById('promoBanner')){ window.Eldava = window.Eldava || { rehydrate:function(){} }; return; }
   var PROMO = { code:'ELDAVA15', pct:0.15, claimed:false };
 
   var SERVICES = [

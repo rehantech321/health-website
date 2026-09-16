@@ -91,12 +91,17 @@ DATABASE_URL="postgresql://postgres.jyjhfxhcvgwltiqezigp:s1a2q3i4b5%24@aws-0-ap-
 EOF
 
 cat > /var/www/eldava/.env.local <<'EOF'
-NEXT_PUBLIC_SITE_URL="https://app.eldava.com"
+NEXT_PUBLIC_SITE_URL="https://app.eldava.com"     # used in every email link - must be the public URL
 ANTHROPIC_API_KEY=""
 STRIPE_SECRET_KEY=""
 STRIPE_WEBHOOK_SECRET=""
-RESEND_API_KEY=""
-MAIL_FROM="Eldava Health <care@eldava.com>"
+# Email via the Namecheap Private Email mailbox (SMTP)
+SMTP_HOST="mail.privateemail.com"
+SMTP_PORT="465"
+SMTP_USER="telehealth@eldava.com"
+SMTP_PASS=""
+MAIL_FROM="Eldava Health <telehealth@eldava.com>"
+ADMIN_EMAIL="telehealth@eldava.com"
 EOF
 
 chown eldava:eldava /var/www/eldava/.env /var/www/eldava/.env.local
@@ -176,7 +181,26 @@ and set `NEXT_PUBLIC_SITE_URL="https://eldava.com"` in `.env.local` + redeploy.
   from Windows.
 - **The demo clinicians** (`eldava-demo-2026`) are in the shared Supabase
   database and will be live on this URL too. Delete or re-password them before
-  sharing the link with anyone: `prisma/seed.js` lists them.
+  sharing the link with anyone: `prisma/seed.js` lists them. Easiest from the
+  admin panel: *Clinicians -> open one -> Deactivate* (or set a new password).
+- **The admin panel** is at `https://app.eldava.com/admin/`. The seeded login is
+  `admin@eldava.com` / `eldava-admin-2026` - it is in a public git repo, so
+  **change it before anyone else has the link**. Either run the seed once with
+  your own values (`SEED_ADMIN_EMAIL=you@eldava.com SEED_ADMIN_PASSWORD='...'
+  npm run db:seed` creates a second admin; the seed never resets an existing
+  one), or change the seeded password directly:
+
+  ```bash
+  cd /var/www/eldava && node -e "
+  const {PrismaClient}=require('@prisma/client');const {scryptSync,randomBytes}=require('crypto');
+  const pw=process.argv[1];const salt=randomBytes(16);
+  const hash=['scrypt',16384,salt.toString('hex'),scryptSync(pw,salt,64,{N:16384}).toString('hex')].join('$');
+  new PrismaClient().admin.update({where:{email:'admin@eldava.com'},data:{passwordHash:hash}}).then(()=>console.log('changed'))
+  " 'YOUR-NEW-PASSWORD'
+  ```
+
+  Then *Sign out* in the panel and back in. New doctors who apply on the site
+  now wait in *Doctor applications* until you approve them there.
 - **Backups.** Supabase keeps daily backups on paid plans; on the free tier,
   export periodically. The VPS holds no data - it can be rebuilt from git in
   ten minutes with this guide.

@@ -9,7 +9,10 @@
 // Money is stored in minor units (pence) as Int throughout. Never Float.
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // Fetch relations with SQL JOINs instead of one query per relation: the
+  // database is remote and every round trip costs hundreds of milliseconds.
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {
@@ -57,6 +60,37 @@ model Clinician {
   sessions     Session[]
 }
 
+/// Practice administrators. Separate from Clinician and Patient on purpose:
+/// an admin sees everything, so the account type - and its cookie - are
+/// distinct, and one login can never quietly escalate into another.
+model Admin {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions Session[]
+  audit    AdminAuditLog[]
+}
+
+/// Every state-changing admin action, who did it, and to what. Never deleted.
+model AdminAuditLog {
+  id        String   @id @default(cuid())
+  adminId   String
+  action    String   // e.g. application.approve, clinician.update, appointment.cancel
+  target    String   // the affected record id
+  meta      Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  admin Admin @relation(fields: [adminId], references: [id])
+
+  @@index([createdAt])
+  @@index([target])
+}
+
 /// One row per logged-in browser. Opaque token, stored hashed; the raw token
 /// only ever lives in an httpOnly cookie. Exactly one of the two ids is set.
 model Session {
@@ -64,11 +98,13 @@ model Session {
   tokenHash   String   @unique
   patientId   String?
   clinicianId String?
+  adminId     String?
   expiresAt   DateTime
   createdAt   DateTime @default(now())
 
   patient   Patient?   @relation(fields: [patientId], references: [id], onDelete: Cascade)
   clinician Clinician? @relation(fields: [clinicianId], references: [id], onDelete: Cascade)
+  admin     Admin?     @relation(fields: [adminId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])
 }
@@ -389,6 +425,10 @@ model ClinicianApplication {
   languages     String
   status        ApplicationStatus @default(RECEIVED)
   reviewNotes   String?           @db.Text
+  /// Set on approval: the Clinician account created from this application.
+  clinicianId   String?           @unique
+  reviewedAt    DateTime?
+  reviewedById  String?
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 

@@ -27,6 +27,8 @@ API routes under `app/api/` and a Postgres database.
 - Founding 500 prepaid vouchers, with a live counter and a server-enforced cap
 - Patient profile: details, every booking, every voucher
 
+**Admin panel** at `/admin` - the practice's own back office (see below).
+
 ## Setup
 
 ```bash
@@ -60,6 +62,11 @@ labelled mock mode rather than failing:
 
 Demo clinician sign-in after seeding: any address in `prisma/seed.js`
 (e.g. `amara.osei@eldava.com`), password `eldava-demo-2026`.
+
+Admin sign-in after seeding: `/admin`, `admin@eldava.com` /
+`eldava-admin-2026`. Override with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`
+when running the seed; the password is only set when the account is first
+created, so re-seeding never resets it. **Change it before going live.**
 
 ## How it works
 
@@ -137,7 +144,41 @@ harm, not a feature.
 Stored first, then emailed to the routed team inbox (routing lives server-side
 so the browser cannot redirect an enquiry). Applications are held for
 credentialing review; nothing creates a clinician account until a human
-approves it.
+approves it in the admin panel.
+
+**Admin panel** - `app/admin/*` (UI) and `app/api/admin/*` (API). A third
+account type with its own cookie (`eldava_admin`), its own login, and no
+overlap with patient or clinician sessions - a patient cookie on an admin
+route is a 401, not a downgrade.
+
+- *Doctor applications*: the queue of clinicians who signed up. Until an
+  application is approved the applicant cannot sign in to the portal
+  (`/api/clinician/login` answers 403 "still under review" / "not approved").
+  Approving creates the `Clinician` from the application - same email, the
+  password they chose, the display name and service category the admin
+  confirms - and emails them. Declining emails them the review notes.
+  Approving twice is a 409; the application records who approved it and when.
+- *Clinicians*: add directly (for a doctor the practice already knows), edit
+  details, bio and password, deactivate (hidden from booking and blocked from
+  sign-in, history kept) or reactivate, publish availability (date range x
+  hours x weekdays, in one go, skipping any time already published), remove
+  free slots. Delete is refused while the clinician has any appointments.
+- *Patients*: search, view every booking / voucher / intake (with the AI
+  summary and the clinician's note, both logged as reads - see below), edit
+  contact details. Delete is refused while paid or completed records exist:
+  those are financial and clinical records with retention obligations.
+- *Appointments*: every booking across every clinician, filterable by status,
+  clinician, date window and search. Cancel with a reason: the slot is released,
+  patient and clinician are emailed, and the response flags `refundNeeded` when
+  the payment had gone through (refunds are issued in Stripe, not here).
+- *Enquiries*, *Founding 500*: triage and close enquiries; see vouchers sold.
+- *Audit log*: append-only record of every admin action, and of every time an
+  admin opened a record containing clinical content (`patient.view`,
+  `appointment.view`). The dashboard's "needs attention" strip counts pending
+  applications, new enquiries and upcoming video appointments with no link.
+
+The panel is `noindex` and listed in `robots.txt` as disallowed; the URL is
+not a secret, the login is.
 
 ## Routing note
 
@@ -151,11 +192,12 @@ logged as a failed delivery. `next.config.js` therefore sets
 
 ```
 app/api/            auth, intake, booking, vouchers, payments, patient,
-                    clinician, enquiries, applications, promo
+                    clinician, enquiries, applications, promo, admin
+app/admin/          admin panel (client components; its own admin.css)
 app/<route>/        one page.tsx per marketing route (npm run gen)
 app/mock-checkout/  stand-in for Stripe Checkout when no key is set
 lib/server/         db, auth, http, services, anthropic, claude/, payments,
-                    booking-state, promo, vouchers, mail
+                    booking-state, promo, vouchers, mail, holds, admin
 lib/shared-body.ts  the page body HTML (editable multi-line template literal)
 lib/routes.ts       route table -> metadata, sitemap
 public/eldava-app.js  all client logic, wired to the API
@@ -182,6 +224,16 @@ draft -> sign -> immutable -> appointment COMPLETED; and the 401/400/405 guards.
 The client script was confirmed running in a real browser (headless Edge),
 rendering the live voucher counter.
 
+The admin panel has its own 30-assertion suite: admin 401s and cookie
+isolation; doctor applies -> sign-in blocked with the review message ->
+admin approves -> clinician created in the chosen category -> doctor signs in
+with the password they chose -> second approval 409; availability publishing
+and the new doctor appearing in patient slot search; edit / deactivate
+(sign-in 403, hidden from search) / reactivate; patient edit; a paid booking
+appearing in the admin list, cancel releasing the slot and flagging a refund,
+second cancel 409; delete-with-records refused for both clinician and patient;
+and the audit trail. Every admin page was rendered in headless Edge.
+
 Payment ran through the mock checkout (no Stripe key) but exercised the real
 `confirmPayment` transition, the same code path a Stripe webhook uses. Intake
 and summaries ran in mock mode (no Anthropic key); the real path shares all
@@ -191,12 +243,14 @@ validation and storage and differs only in what generates the text.
 
 Working software, not a cleared clinical system. Still needed at minimum:
 encryption at rest and a retention policy for `IntakeSession` /
-`ClinicalNote`; an audit trail of who read which record; DPIA and UK GDPR
+`ClinicalNote` (the admin audit log records who read which record, but is
+not yet tamper-evident); DPIA and UK GDPR
 Article 9 lawful basis; real regulator verification of clinician registration
 numbers (the seed asserts them, and approving an application does not check
-them); rate limiting and lockout on all three login endpoints; real video/phone
+them); rate limiting and lockout on all three login endpoints, and a second factor
+for admin sign-in; real video/phone
 infrastructure behind `Appointment.joinUrl`; deletion of the seeded demo
-clinicians and their shared password; and clinical sign-off on both prompts in
+clinicians and their shared password and a new admin password; and clinical sign-off on both prompts in
 `lib/server/claude/`.
 
 ## Header

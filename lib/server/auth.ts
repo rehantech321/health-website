@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { cookies, headers } from 'next/headers';
-import type { Patient, Clinician } from '@prisma/client';
+import type { Patient, Clinician, Admin } from '@prisma/client';
 import prisma from './db';
 import { fail } from './http';
 
@@ -42,6 +42,7 @@ export function verifyPassword(password: string, stored: string): boolean {
 
 export const PATIENT_COOKIE = 'eldava_patient';
 export const CLINICIAN_COOKIE = 'eldava_clinician';
+export const ADMIN_COOKIE = 'eldava_admin';
 const SESSION_DAYS = 14;
 
 function hashToken(token: string) {
@@ -74,7 +75,7 @@ function cookieOptions(maxAge: number) {
 }
 
 /// Creates a DB-backed session and sets the matching httpOnly cookie.
-export async function createSession(who: { patientId?: string; clinicianId?: string }) {
+export async function createSession(who: { patientId?: string; clinicianId?: string; adminId?: string }) {
   const token = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
 
@@ -83,11 +84,12 @@ export async function createSession(who: { patientId?: string; clinicianId?: str
       tokenHash: hashToken(token),
       patientId: who.patientId ?? null,
       clinicianId: who.clinicianId ?? null,
+      adminId: who.adminId ?? null,
       expiresAt,
     },
   });
 
-  const name = who.patientId ? PATIENT_COOKIE : CLINICIAN_COOKIE;
+  const name = who.patientId ? PATIENT_COOKIE : who.adminId ? ADMIN_COOKIE : CLINICIAN_COOKIE;
   cookies().set(name, token, cookieOptions(SESSION_DAYS * 24 * 60 * 60));
 }
 
@@ -97,7 +99,7 @@ async function resolveSession(cookieName: string) {
 
   const session = await prisma.session.findUnique({
     where: { tokenHash: hashToken(token) },
-    include: { patient: true, clinician: true },
+    include: { patient: true, clinician: true, admin: true },
   });
   if (!session) return null;
 
@@ -120,6 +122,12 @@ export async function getClinician(): Promise<Clinician | null> {
   return clinician && clinician.active ? clinician : null;
 }
 
+export async function getAdmin(): Promise<Admin | null> {
+  const session = await resolveSession(ADMIN_COOKIE);
+  const admin = session?.admin ?? null;
+  return admin && admin.active ? admin : null;
+}
+
 export async function destroySession(cookieName: string) {
   const token = cookies().get(cookieName)?.value;
   if (token) {
@@ -130,13 +138,14 @@ export async function destroySession(cookieName: string) {
 
 /// After a password change: sign out every other browser this account is in,
 /// keeping only the session that made the change.
-export async function destroyOtherSessions(cookieName: string, who: { patientId?: string; clinicianId?: string }) {
+export async function destroyOtherSessions(cookieName: string, who: { patientId?: string; clinicianId?: string; adminId?: string }) {
   const token = cookies().get(cookieName)?.value;
   const keep = token ? hashToken(token) : '';
   await prisma.session.deleteMany({
     where: {
       ...(who.patientId ? { patientId: who.patientId } : {}),
       ...(who.clinicianId ? { clinicianId: who.clinicianId } : {}),
+      ...(who.adminId ? { adminId: who.adminId } : {}),
       tokenHash: { not: keep },
     },
   });
@@ -160,9 +169,20 @@ export async function requireClinician<T>(
   return handler(clinician);
 }
 
+/// Runs the handler only for a signed-in, active admin; otherwise 401.
+export async function requireAdmin<T>(handler: (admin: Admin) => Promise<T>): Promise<T | Response> {
+  const admin = await getAdmin();
+  if (!admin) return fail('Admin sign-in required.', 401);
+  return handler(admin);
+}
+
 /// Strip secrets before a record is sent to the browser.
 export function publicPatient(p: Patient) {
   return { id: p.id, fullName: p.fullName, email: p.email, country: p.country };
+}
+
+export function publicAdmin(a: Admin) {
+  return { id: a.id, name: a.name, email: a.email };
 }
 
 export function publicClinician(c: Clinician) {
