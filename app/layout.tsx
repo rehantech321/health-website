@@ -25,7 +25,10 @@ function appScriptSrc(): string {
 // eldava-app.js). Everything below is identical to the static <head> tags
 // that used to live at the top of index.html.
 export const metadata: Metadata = {
-  metadataBase: new URL('https://eldava.com'),
+  // Absolute base for og:image / twitter:image. Must be the host the site is
+  // actually served from (app.eldava.com today, eldava.com later), or link
+  // previews point at an image that does not resolve.
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://eldava.com'),
   title: 'Global Specialist Health Assessments Online | Eldava Health',
   description:
     "Eldava Health is a global telehealth platform for specialist diagnostic assessments: ADHD and autism, women's health, dementia and memory, men's health, medico-legal reports and more. Licensed clinicians, live video, often within days, not years. Pay in full or in 3 instalments.",
@@ -41,8 +44,7 @@ export const metadata: Metadata = {
       "A global telehealth platform spanning neurodevelopmental, women's health, dementia, men's health and medico-legal assessment. Licensed clinicians. 60+ specialties across 20 countries. Pay in full or in 3.",
     url: 'https://eldava.com/',
     locale: 'en_GB',
-    // og:image intentionally omitted: no real 1200x630 asset exists yet.
-    // Add one at https://eldava.com/og-image.jpg before launch, then add it here.
+    // og:image comes from app/opengraph-image.tsx (Next adds the tags).
   },
   twitter: {
     card: 'summary_large_image',

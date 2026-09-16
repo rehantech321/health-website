@@ -8,9 +8,12 @@ export function middleware(req: NextRequest) {
 
   const isApi = pathname.startsWith('/api/');
   const isFile = /\.[a-zA-Z0-9]+$/.test(pathname); // /eldava-app.js, /robots.txt, ...
+  // Images Next generates from app/icon.tsx, app/opengraph-image.tsx etc.
+  // are served at the bare path only; a slash-redirect would 404 them.
+  const isMetaImage = /^\/(icon|apple-icon|opengraph-image|twitter-image)(\/|$)/.test(pathname);
   const hasSlash = pathname.endsWith('/');
 
-  if (!isApi && !isFile && !hasSlash) {
+  if (!isApi && !isFile && !isMetaImage && !hasSlash) {
     // Deliberately a plain URL, not req.nextUrl.clone(): NextURL normalises
     // the trailing slash back off when it serialises, which turned this into
     // a /pricing -> /pricing redirect loop.

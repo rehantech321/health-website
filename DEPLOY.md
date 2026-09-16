@@ -87,11 +87,11 @@ Prisma CLI only reads that file.
 
 ```bash
 cat > /var/www/eldava/.env <<'EOF'
-DATABASE_URL="postgresql://postgres.jyjhfxhcvgwltiqezigp:s1a2q3i4b5%24@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
+DATABASE_URL="postgresql://postgres.<project-ref>:<db-password>@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"   # Supabase -> Connect -> Session pooler; URL-encode the password
 EOF
 
 cat > /var/www/eldava/.env.local <<'EOF'
-NEXT_PUBLIC_SITE_URL="https://app.eldava.com"     # used in every email link - must be the public URL
+NEXT_PUBLIC_SITE_URL="https://app.eldava.com"     # every email link + the og:image URL in link previews; baked in at build, so set it BEFORE deploy.sh
 ANTHROPIC_API_KEY=""
 STRIPE_SECRET_KEY=""
 STRIPE_WEBHOOK_SECRET=""
