@@ -138,7 +138,37 @@ certbot --nginx -d app.eldava.com --redirect -m you@example.com --agree-tos
 Certbot edits the Nginx config, installs the certificate and sets up
 auto-renewal. `https://app.eldava.com/` is now live, and http redirects to it.
 
-## 6. Stripe webhook (when you add real keys)
+## 6. Taking real payments - card and Klarna
+
+Right now the server has **no Stripe key**, so every checkout (card *and*
+"Pay later" / Klarna) goes to the built-in `/mock-checkout` page and no money
+moves. Nothing else is needed for Klarna to *appear* - it is simulated. To
+take real money:
+
+1. **Stripe account** - <https://dashboard.stripe.com>. Register the
+   business (UK entity, GBP). Until Stripe's activation is complete the account
+   is in test mode only.
+2. **Enable Klarna on the account** - Dashboard → *Settings → Payments →
+   Payment methods* → find **Klarna** → *Turn on*. Klarna needs a UK/EU
+   business and GBP/EUR; Stripe shows any blocker on that page. Without this
+   step Stripe rejects every Klarna session with *"payment method type klarna
+   is invalid"* and the patient sees *"Pay later with Klarna is not available
+   at the moment"*.
+3. **Keys** - Dashboard → *Developers → API keys*. Put the secret key in
+   `/var/www/eldava/.env.local` as `STRIPE_SECRET_KEY="sk_test_…"` (test) or
+   `"sk_live_…"` (live). Never the publishable `pk_` key - the site uses
+   Stripe's hosted page, so it has no use for it.
+4. **Webhook** (below) - without it payments are taken but never marked paid.
+5. `deploy.sh`, then open **Admin → Dashboard → System status**. It checks
+   the key against Stripe, whether Klarna is actually switched on for the
+   account, and whether the webhook secret is present - and lists the last
+   few checkout failures with Stripe's exact error text.
+
+Test cards and Klarna test flows: <https://docs.stripe.com/testing> (card
+`4242 4242 4242 4242`; Klarna in test mode lets you approve or decline on a
+sandbox page).
+
+### Webhook
 
 Stripe dashboard → Developers → Webhooks → **Add endpoint**:
 

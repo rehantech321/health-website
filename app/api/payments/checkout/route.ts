@@ -5,6 +5,23 @@ import { createCheckout, isLive } from '@/lib/server/payments';
 
 const METHODS = new Set(['CARD', 'KLARNA']);
 
+/// Turns a Stripe error into something a patient can act on (or at least
+/// understand), without leaking key material or internals.
+function describeProviderError(e: unknown, method: 'CARD' | 'KLARNA'): string {
+  const msg = String((e as any)?.message || '');
+  const code = String((e as any)?.code || (e as any)?.type || '');
+  if (/invalid api key|authentication/i.test(msg) || code === 'StripeAuthenticationError') {
+    return 'Payments are not configured correctly on our side. Please try again later or contact us.';
+  }
+  if (method === 'KLARNA' && /klarna/i.test(msg)) {
+    return 'Pay later with Klarna is not available at the moment. Please pay in full by card instead.';
+  }
+  if (/payment_method_types|is invalid|not activated/i.test(msg)) {
+    return 'That payment method is not available at the moment. Please choose another.';
+  }
+  return 'Our payment provider could not start the checkout. Please try again in a moment.';
+}
+
 /// Starts a hosted checkout for a pending appointment or voucher and returns
 /// the URL to send the browser to. Card and Klarna differ only in which
 /// methods the hosted page offers.
@@ -65,8 +82,10 @@ export const POST = withErrors(async (req: Request) =>
       ? await prisma.payment.update({ where: { id: target.existingPaymentId }, data: paymentData })
       : await prisma.payment.create({ data: { ...paymentData, currency: target.currency, ...target.link } });
 
-    const checkout = await createCheckout(
-      {
+    let checkout: Awaited<ReturnType<typeof createCheckout>>;
+    try {
+      checkout = await createCheckout(
+        {
         paymentId: payment.id,
         reference: target.reference,
         amountMinor: target.amountMinor,
@@ -81,6 +100,15 @@ export const POST = withErrors(async (req: Request) =>
       },
       base
     );
+    } catch (e) {
+      // A provider rejection is a configuration problem on our side, not the
+      // patient's. Say what happened, keep the hold, and record it so the
+      // admin dashboard can show it.
+      const message = describeProviderError(e, method);
+      console.error('[payments] checkout failed:', method, target.reference, (e as Error).message);
+      await prisma.payment.update({ where: { id: payment.id }, data: { lastError: String((e as Error).message || e).slice(0, 500) } }).catch(() => {});
+      return fail(message, 502);
+    }
 
     if (!checkout.mock) {
       await prisma.payment.update({ where: { id: payment.id }, data: { stripePaymentIntentId: checkout.id, status: 'PROCESSING' } });

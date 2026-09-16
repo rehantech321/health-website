@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api, Badge, Head, fmtWhen, money } from './ui';
 
@@ -52,6 +52,54 @@ export default function Dashboard() {
           </table>
         </div>
       </div>
+
+      <SystemStatus />
     </>
+  );
+}
+
+const LABELS: Record<string, string> = { database: 'Database', payments: 'Payments (Stripe)', klarna: 'Klarna / pay later', webhook: 'Payment webhook', email: 'Email', ai: 'AI intake', siteUrl: 'Public URL' };
+
+/// Live checks of what this server is actually wired to, so "why did
+/// checkout fail" can be answered here instead of in the server logs.
+function SystemStatus() {
+  const [h, setH] = useState<any>(null);
+  const [err, setErr] = useState('');
+  useEffect(() => { api<any>('/api/admin/health').then((r) => (r.ok ? setH(r.data) : setErr(r.data.error || 'Failed'))); }, []);
+  const tone = (s: string) => (s === 'ok' ? 'ok' : s === 'warn' ? 'warn' : 'bad');
+  return (
+    <div className="adm-panel">
+      <h2>System status</h2>
+      {err ? <div className="adm-msg bad">{err}</div> : null}
+      {!h && !err ? <p style={{ color: '#6b6252' }}>Checking…</p> : null}
+      {h ? (
+        <>
+          <dl className="adm-dl">
+            {Object.entries(h.checks).map(([k, v]: [string, any]) => (
+              <React.Fragment key={k}>
+                <dt>{LABELS[k] || k}</dt>
+                <dd><span className={`adm-badge ${tone(v.status)}`}>{v.status === 'ok' ? 'ok' : v.status === 'warn' ? 'note' : 'problem'}</span> <span style={{ fontWeight: 400 }}>{v.detail}</span></dd>
+              </React.Fragment>
+            ))}
+          </dl>
+          {h.failures.length ? (
+            <>
+              <h3 style={{ marginTop: 18 }}>Recent checkout failures</h3>
+              <div className="adm-wrap">
+                <table className="adm-table">
+                  <thead><tr><th>When</th><th>Reference</th><th>Method</th><th>Status</th><th>Provider said</th></tr></thead>
+                  <tbody>
+                    {h.failures.map((f: any) => (
+                      <tr key={f.id}><td>{fmtWhen(f.at)}</td><td><code>{f.reference}</code></td><td>{f.method}{f.mock ? ' (mock)' : ''}</td><td><Badge s={f.status} /></td><td style={{ fontSize: '.8rem', color: '#a3231b' }}>{f.error}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : null}
+          <p style={{ fontSize: '.78rem', color: '#6b6252', marginTop: 10 }}>Node {h.node} · {h.env}</p>
+        </>
+      ) : null}
+    </div>
   );
 }
