@@ -3,6 +3,10 @@
   // layout and has none of the site shell; nothing below applies there.
   if(!document.getElementById('promoBanner')){ window.Eldava = window.Eldava || { rehydrate:function(){} }; return; }
   var PROMO = { code:'ELDAVA15', pct:0.15, claimed:false };
+  // Service name -> its dedicated page (/assessments/...), for linking the
+  // price list and menus to those pages. Rendered by SharedShell.
+  var SERVICE_PAGES = {};
+  try{ SERVICE_PAGES = JSON.parse(document.getElementById('eldavaServicePages').textContent) || {}; }catch(e){}
 
   var SERVICES = [
     {cat:'mind', name:'Child Autism Assessment', desc:'Full diagnostic assessment for children', price:915, dur:'90 min'},
@@ -653,6 +657,7 @@
   }
 
   function renderAccordion(el, items, withIndex){
+    if(!el) return;
     el.innerHTML = items.map(function(it,i){
       return '<div class="acc-item" data-open="false"><button class="acc-trigger" onclick="Eldava.toggleAcc(this)">'
         + '<span class="t">' + (withIndex? '<span class="idx">0'+(i+1)+'</span>':'') + (it.t||it.q) + '</span>'
@@ -668,18 +673,21 @@
   }
 
   function renderPriceTabs(){
-    document.getElementById('priceTabs').innerHTML = Object.keys(CATS).map(function(k,i){
+    var tabsEl = document.getElementById('priceTabs');
+    if(!tabsEl) return;
+    tabsEl.innerHTML = Object.keys(CATS).map(function(k,i){
       return '<button class="tab" role="tab" aria-selected="'+(i===0?'true':'false')+'" data-cat="'+k+'" onclick="Eldava.filterPrice(this)">'+CATS[k]+'</button>';
     }).join('');
   }
 
   function renderPriceTable(cat){
     var body = document.getElementById('priceTableBody');
+    if(!body) return;
     var rows = SERVICES.filter(function(s){ return cat==='all' || s.cat===cat; });
     body.innerHTML = rows.map(function(s){
       var now = currentPrice(s.price);
       var split = threeSplit(now)[0];
-      return '<tr><td><div class="svc-name">'+s.name+'</div><div class="svc-desc">'+s.desc+'</div></td>'
+      return '<tr><td><div class="svc-name">'+(SERVICE_PAGES[s.name] ? '<a href="'+SERVICE_PAGES[s.name]+'">'+s.name+'</a>' : s.name)+'</div><div class="svc-desc">'+s.desc+'</div></td>'
         + '<td>'+s.dur+'</td><td class="svc-price">'+priceBlockHtml(s.price,'svc-price')+'</td>'
         + '<td class="mono" style="color:var(--text-soft); font-size:0.85rem;">3 &times; '+fmt(split)+'</td>'
         + '<td><button class="btn btn-primary btn-sm" onclick="Eldava.openBooking(\''+s.name.replace(/'/g,"\\'")+'\')">Book</button></td></tr>';
@@ -688,22 +696,31 @@
 
   var blogFilter = 'all';
   function renderBlogTabs(){
-    document.getElementById('blogTabs').innerHTML = Object.keys(ARTICLE_CATS).map(function(k,i){
+    var tabsEl = document.getElementById('blogTabs');
+    if(!tabsEl) return;
+    tabsEl.innerHTML = Object.keys(ARTICLE_CATS).map(function(k,i){
       return '<button class="tab" role="tab" aria-selected="'+(k===blogFilter?'true':'false')+'" data-cat="'+k+'" onclick="Eldava.filterBlog(this)">'+ARTICLE_CATS[k]+'</button>';
     }).join('');
   }
   function renderBlogGrid(){
     var rows = ARTICLES.filter(function(a){ return blogFilter==='all' || a.cat===blogFilter; });
-    document.getElementById('blogGrid').innerHTML = rows.map(function(a){
-      return '<button class="blog-card" onclick="Eldava.openArticle(\''+a.id+'\')">'
+    var grid = document.getElementById('blogGrid');
+    if(!grid) return;
+    // Real links to each article's own page (app/insights/[slug]), so every
+    // article is crawlable and shareable at its own URL.
+    grid.innerHTML = rows.map(function(a){
+      return '<a class="blog-card" href="/insights/'+a.id+'/">'
         + '<span class="cat">'+ARTICLE_CATS[a.cat]+'</span>'
         + '<h3>'+a.title+'</h3>'
         + '<p>'+a.excerpt+'</p>'
-        + '<span class="rd">'+a.read+'</span></button>';
+        + '<span class="rd">'+a.read+'</span></a>';
     }).join('');
   }
   function findArticle(id){ for(var i=0;i<ARTICLES.length;i++){ if(ARTICLES[i].id===id) return ARTICLES[i]; } return null; }
   function renderBlogArchive(){
+    // Retired: each article now has its own URL (a second full copy of every
+    // article on /insights/ was duplicate content). Kept so callers need no change.
+    return;
     var el = document.getElementById('blogArchive');
     if(!el) return;
     el.innerHTML = ARTICLES.map(function(a){
@@ -733,7 +750,7 @@
     }).join('');
     var popular = [SERVICES[3], SERVICES[4], SERVICES[0]];
     var pop = popular.map(function(s){
-      return '<div class="pop-row"><span>'+s.name+'</span><span class="p mono">'+fmt(currentPrice(s.price))+'</span></div>';
+      return '<div class="pop-row"><span>'+(SERVICE_PAGES[s.name] ? '<a href="'+SERVICE_PAGES[s.name]+'">'+s.name+'</a>' : s.name)+'</span><span class="p mono">'+fmt(currentPrice(s.price))+'</span></div>';
     }).join('');
     document.getElementById('megaMenu').innerHTML =
       '<div class="cats">'+cats+'</div>'
@@ -1124,13 +1141,18 @@
       renderCountryOptions(document.getElementById('clinApCountry'), 'Select your country');
       renderCountryOptions(document.getElementById('pCountry'), 'Select your country');
     }
-    document.getElementById('heroFromPrice').textContent = fmt(currentPrice(SERVICES[3].price));
-    document.getElementById('bannerCode').textContent = PROMO.code;
-    document.getElementById('priceStripCode').textContent = PROMO.code;
+    setText('heroFromPrice', fmt(currentPrice(SERVICES[3].price)));
+    setText('bannerCode', PROMO.code);
+    setText('priceStripCode', PROMO.code);
     var bp = currentPrice(SERVICES[3].price), sp = threeSplit(bp);
-    document.getElementById('bnplExAmount').textContent = fmt(bp);
-    document.getElementById('bnplExFull').textContent = fmt(bp)+' today';
-    document.getElementById('bnplExThree').textContent = '3 \u00d7 '+fmt(sp[0]);
+    setText('bnplExAmount', fmt(bp));
+    setText('bnplExFull', fmt(bp)+' today');
+    setText('bnplExThree', '3 \u00d7 '+fmt(sp[0]));
+    // Prices on server-built pages (assessment pages) follow the promo state too.
+    document.querySelectorAll('[data-live-price]').forEach(function(el){
+      var svc = findService(el.getAttribute('data-live-price'));
+      if(svc && svc.name === el.getAttribute('data-live-price')) el.textContent = fmt(currentPrice(svc.price));
+    });
     renderFoundingCounter();
   }
 
@@ -1211,7 +1233,9 @@
       // bounce them back here once they have.
       if(page === 'profile' && !patientAccount){ pendingAction = 'profile'; pendingArgs = null; page = 'register'; }
       var target = document.getElementById('page-'+page);
-      if(!target) return;
+      // Each page ships only its own section (lib/activate-route.ts); any
+      // other section is a real page load at its own URL.
+      if(!target){ if(PAGE_PATHS[page]){ window.location.href = PAGE_PATHS[page]; } return; }
       document.querySelectorAll('.page-view').forEach(function(p){ p.classList.remove('active'); });
       target.classList.add('active');
       // Mark the active nav item so the underline indicator tracks the page.
@@ -1225,69 +1249,69 @@
       Eldava.closeSolutions();
       Eldava.closeMobileNav();
       var titles = {
-        home:'Eldava Health | Get Answers in Days, Not Years',
-        pricing:'Assessments and Pricing | Eldava Health',
-        how:'How It Works | Eldava Health',
-        partner:'Join the Network | Eldava Health',
-        about:'About and Trust | Eldava Health',
-        pharmacy:'Pharmacy Delivery | Eldava Health',
-        academy:'Clinician Training Academy | Eldava Health',
-        corporate:'For Employers | Eldava Health',
-        schools:'For Schools | Eldava Health',
-        universities:'For Universities | Eldava Health',
-        insurers:'For Insurers | Eldava Health',
-        ai:'Our Intake Technology | Eldava Health',
+        home:'Private Online ADHD & Autism Assessments | Eldava Health',
+        pricing:'Private Assessment Prices: ADHD, Autism & More | Eldava Health',
+        how:'How an Online ADHD or Autism Assessment Works | Eldava Health',
+        partner:'Join Our Clinician Network | Remote Assessment Work | Eldava Health',
+        about:'About Eldava Health | Clinical Governance & Patient Safety',
+        pharmacy:'Online Prescription & Pharmacy Delivery | Eldava Health',
+        academy:'ADHD & Autism Assessment Training for Clinicians | Eldava Health',
+        corporate:'Neurodiversity & ADHD Assessments for Employers | Eldava Health',
+        schools:'SEN, EHCP & Autism Assessments for Schools | Eldava Health',
+        universities:'DSA Assessments for University Students | Eldava Health',
+        insurers:'Diagnostic Assessment Partnerships for Insurers | Eldava Health',
+        ai:'Guided Pre-Consultation Intake Technology | Eldava Health',
         outcomes:'Outcomes and Transparency | Eldava Health',
-        pathway:'The Complete Pathway | Eldava Health',
-        'founder-note':'A Note From The Founder | Eldava Health',
-        screening:'Free Screening Tools | Eldava Health',
+        pathway:'ADHD Assessment, Treatment & Aftercare Pathway | Eldava Health',
+        'founder-note':'Why We Built Eldava Health: A Note From the Founder',
+        screening:'Free ADHD & Autism Screening Tests Online | Eldava Health',
         register:'Create Your Account | Eldava Health',
         profile:'Your Profile | Eldava Health',
         'clinician-login':'Clinician Sign In | Eldava Health',
         'clinician-portal':'Clinician Portal | Eldava Health',
         founders:'Founders Circle | Eldava Health',
-        events:'Events | Eldava Health',
-        blog:'Insights and Articles | Eldava Health',
-        'health-systems':'For Health Systems and Commissioners | Eldava Health',
-        legal:'For Legal & Solicitors | Eldava Health',
-        charity:'Our Charity Partnership | Eldava Health',
-        founding500:'Founding 500 Vouchers | Eldava Health'
+        events:'ADHD, Autism & Dementia Webinars and Events | Eldava Health',
+        blog:'ADHD, Autism & Assessment Articles | Eldava Health Insights',
+        'health-systems':'Assessment Backlog Pilots for NHS Trusts & ICBs | Eldava Health',
+        legal:'Mental Capacity & Medico-Legal Expert Reports | Eldava Health',
+        charity:'Our Dementia & Fertility Charity Partnership | Eldava Health',
+        founding500:'Founding 500: Prepaid Assessment Vouchers | Eldava Health'
       };
       var descs = {
-        home:'A global telehealth platform for specialist diagnostic assessments: ADHD and autism, women\'s health, dementia, men\'s health and more. Licensed clinicians, live video, in days not years.',
-        pricing:'Browse and book 60+ specialist assessments and pathways, from ADHD and autism to women\'s health, dementia, men\'s health and medico-legal reports, with transparent pricing and instalment options.',
-        how:'How an Eldava Health assessment works, from booking to your signed clinical report, in four steps.',
-        partner:'Join the Eldava Health clinician network: apply as a psychiatrist, psychologist, pharmacist or specialist nurse prescriber.',
-        about:'Our clinical governance model, Clinical Director, and the trust and safety standards behind every Eldava Health assessment.',
-        pharmacy:'How prescription delivery works after an Eldava Health assessment, where medication is clinically indicated.',
-        academy:'Structured training for licensed clinicians building a specialism in ADHD and autism assessment.',
-        corporate:'Employer programmes for neurodivergent and specialist health assessment, in three tiers: Essential, Growth and Enterprise.',
-        schools:'Specialist assessment programmes for schools and multi-academy trusts, supporting EHCP and SEN processes.',
-        universities:'Assessment pathways for university students, including DSA-ready reports.',
-        insurers:'Partnership programmes for insurers referring policyholders for specialist diagnostic assessment.',
-        ai:'How our guided pre-consultation intake tool works, and what it does not do.',
-        outcomes:'Our approach to outcomes, transparency and honest reporting.',
-        pathway:'The Complete Pathway: assessment, treatment and ongoing care in one continuous service.',
-        'founder-note':'Why Jayden Ohen built Eldava Health, in his own words.',
-        screening:'Free, non-diagnostic screening tools for ADHD, autism and related traits.',
+        home:'Private online assessments with licensed clinicians: adult and child ADHD, autism, dementia and memory, menopause and more. Appointments in days, not years. Pay in full or in 3.',
+        pricing:'Transparent prices for 60+ private assessments: adult ADHD, autism, dementia memory assessment, menopause, dyslexia and medico-legal reports. Report included, pay in full or in 3.',
+        how:'How a private online assessment works: book, a guided pre-consultation with a safety check, live video with a licensed clinician, then a signed written report.',
+        partner:'Join the Eldava Health clinician network: remote, flexible assessment work for psychiatrists, psychologists, pharmacists and specialist nurse prescribers.',
+        about:'Who we are, our clinical governance model and Clinical Director, and the credentialing and safety standards behind every Eldava Health assessment.',
+        pharmacy:'How prescriptions work after an Eldava Health assessment: sent to a pharmacy of your choice or a delivery partner, only where medication is clinically indicated.',
+        academy:'Structured training for licensed clinicians building a specialism in adult and child ADHD and autism assessment, with supervised practice.',
+        corporate:'Employer programmes for neurodivergent staff: ADHD, autism and specialist assessments with workplace-ready reports, in Essential, Growth and Enterprise tiers.',
+        schools:'Specialist assessment programmes for schools and multi-academy trusts: autism, ADHD and educational psychology assessments with EHCP-ready reports.',
+        universities:'ADHD, autism and dyslexia assessment pathways for universities and students, with DSA-ready diagnostic reports for Disabled Students\' Allowance applications.',
+        insurers:'Partnership programmes for health insurers referring policyholders for specialist diagnostic assessment, with fixed pricing and fast access.',
+        ai:'How our guided pre-consultation works before your assessment, what it does and does not do, and why a licensed clinician always makes every clinical decision.',
+        outcomes:'How Eldava Health measures and reports outcomes honestly: what we publish, what we do not claim, and how patient feedback is verified.',
+        pathway:'The Complete Pathway: diagnostic assessment, medication titration, coaching and ongoing review with the same service, instead of starting again after diagnosis.',
+        'founder-note':'Why Jayden Ohen built Eldava Health, in his own words: long waiting lists, families left without answers, and what a better assessment service looks like.',
+        screening:'Free, non-diagnostic online screening questionnaires for ADHD and autism traits. A starting point, not a diagnosis, with guidance on what to do next.',
         register:'Create your Eldava Health patient account to book an assessment.',
         profile:'Your Eldava Health account details, appointments and vouchers.',
         'clinician-login':'Sign in to the Eldava Health clinician portal.',
         'clinician-portal':'Manage your Eldava Health clinician caseload and appointments.',
         founders:'The Eldava Health Founders Circle for early clinical and commercial partners.',
-        events:'Upcoming Eldava Health webinars and events for clinicians and the public.',
-        blog:'Practical, fact-checked articles on specialist assessment, waiting lists and workplace support.',
-        'health-systems':'Commissioner-funded and self-funded backlog pilots for NHS trusts, ICBs and public health systems.',
-        legal:'Medico-legal instructions: mental capacity, testamentary capacity, best interests and expert witness reports.',
+        events:'Upcoming Eldava Health webinars and events on ADHD, autism, dementia and specialist assessment, for clinicians and the public.',
+        blog:'Practical, fact-checked articles on adult ADHD, autism, getting a private assessment, waiting lists and workplace support, reviewed by clinicians.',
+        'health-systems':'Commissioner-funded and self-funded ADHD, autism and memory assessment backlog pilots for NHS trusts, ICBs and public health systems.',
+        legal:'Medico-legal instructions for solicitors: mental capacity, testamentary capacity, best interests assessments and court-ready psychiatric expert witness reports.',
         charity:'How every completed Eldava Health assessment gives back to our dementia and fertility charity partners.',
-        founding500:'500 prepaid assessment vouchers at founding pricing, locked for life, closing at launch on 30 September 2026.'
+        founding500:'500 prepaid assessment vouchers at founding pricing, locked for life: memory assessment, fertility and neurodivergent assessment. Closing at launch on 30 September 2026.'
       };
       document.title = titles[page] || 'Eldava Health';
       var metaDesc = document.querySelector('meta[name="description"]');
       if(metaDesc){ metaDesc.setAttribute('content', descs[page] || descs.home); }
       var canon = document.querySelector('link[rel="canonical"]');
       var realPath = PAGE_PATHS[page] || '/';
-      if(canon){ canon.setAttribute('href', 'https://eldava.com' + realPath); }
+      if(canon){ try{ canon.setAttribute('href', new URL(canon.getAttribute('href'), location.href).origin + realPath); }catch(e){} }
       // Real path-based navigation: each page has its own crawlable URL (see PAGE_PATHS above),
       // not just a hash fragment, so this route is independently indexable and shareable.
       try{
@@ -1295,6 +1319,9 @@
       }catch(e){}
     },
     filterPriceByCat: function(cat){
+      // Called straight after go('pricing'); from any other page that is a
+      // page load, so carry the choice across it.
+      if(!document.getElementById('priceTableBody')){ try{ sessionStorage.setItem('eldavaPriceCat', cat); }catch(e){} return; }
       document.querySelectorAll('#priceTabs .tab').forEach(function(t){ t.setAttribute('aria-selected', t.getAttribute('data-cat')===cat ? 'true':'false'); });
       renderPriceTable(cat);
     },
@@ -1372,6 +1399,8 @@
     openArticle: function(id){
       var a = findArticle(id);
       if(!a) return;
+      // Articles have their own pages now; the modal below is no longer used.
+      window.location.href = '/insights/'+id+'/'; return;
       document.getElementById('articleCat').textContent = ARTICLE_CATS[a.cat];
       document.getElementById('articleTitle').textContent = a.title;
       document.getElementById('articleMeta').textContent = a.read + ' · Reviewed 2 September 2026';
@@ -2168,6 +2197,14 @@
     renderAccordion(document.getElementById('uspAccordion'), USPS, true);
     renderAccordion(document.getElementById('faqAccordion'), FAQ, false);
     renderPriceTabs();
+    // A category chosen on another page (filterPriceByCat before a page load).
+    try{
+      var pendingCat = sessionStorage.getItem('eldavaPriceCat');
+      if(pendingCat && document.getElementById('priceTabs')){
+        sessionStorage.removeItem('eldavaPriceCat');
+        document.querySelectorAll('#priceTabs .tab').forEach(function(t){ t.setAttribute('aria-selected', t.getAttribute('data-cat')===pendingCat ? 'true':'false'); });
+      }
+    }catch(e){}
     renderBlogTabs();
     renderBlogGrid();
     renderBlogArchive();
@@ -2178,7 +2215,8 @@
     Eldava.refreshAccountUi();
     if(clinicianAccount){ var who = document.getElementById('clinWho'); if(who) who.textContent = clinicianAccount.displayName; }
     // Re-mark the active nav item for whatever page is showing.
-    var current = PATH_PAGES[location.pathname] || 'home';
+    var custom = document.querySelector('#page-custom[data-nav]');
+    var current = PATH_PAGES[location.pathname] || (custom && custom.getAttribute('data-nav')) || 'home';
     document.querySelectorAll('nav.links .navlink').forEach(function(b){
       if(b.getAttribute('data-page') === current){ b.setAttribute('aria-current','page'); } else { b.removeAttribute('aria-current'); }
     });
@@ -2282,7 +2320,7 @@
   function routeHash(h){
     if(h.indexOf('blog-')===0){
       var artId = h.slice(5);
-      if(findArticle(artId)){ Eldava.go('blog'); Eldava.openArticle(artId); return true; }
+      if(findArticle(artId)){ window.location.replace('/insights/'+artId+'/'); return true; }
     }
     if(h && validPages.indexOf(h)!==-1){ Eldava.go(h); return true; }
     return false;

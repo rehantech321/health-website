@@ -3,7 +3,7 @@ import Script from 'next/script';
 import { createHash } from 'crypto';
 import { readFileSync } from 'fs';
 import path from 'path';
-import { JSON_LD_BLOCKS } from '@/lib/json-ld';
+import { sitewideJsonLd } from '@/lib/seo';
 import './globals.css';
 
 // Cache-busting for the app script. Browsers do not reliably revalidate a
@@ -67,7 +67,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,400..600&family=Work+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap"
         />
-        {JSON_LD_BLOCKS.map((block, i) => (
+        {sitewideJsonLd().map((block, i) => (
           // eslint-disable-next-line react/no-danger
           <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: block }} />
         ))}

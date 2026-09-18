@@ -785,12 +785,6 @@ export const SHARED_BODY_HTML: string = `
       <div class="note-box">Every article on this page is written in house and reviewed for accuracy. We link to the relevant professional or public health guidance where it exists, we don't cite studies we can't point to, and we update articles when the underlying guidance changes.</div>
     </div>
   </section>
-  <section style="background:var(--stone-2);">
-    <div class="wrap">
-      <div class="section-head"><h2>Full article library</h2><p class="desc">Every article in full, in one place. Tap a title to expand it, or use the cards above for a filtered view by topic.</p></div>
-      <div id="blogArchive" class="blog-archive"></div>
-    </div>
-  </section>
 </div>
 
 <!-- ============ FOUNDERS CIRCLE ============ -->
@@ -1423,6 +1417,7 @@ export const SHARED_BODY_HTML: string = `
       <div>
         <h5>Patients</h5>
         <ul>
+          <li><a href="/assessments/">All assessments</a></li>
           <li><a href="/pricing/" onclick="event.preventDefault(); Eldava.go('pricing')">Assessments &amp; pricing</a></li>
           <li><a href="/how-it-works/" onclick="event.preventDefault(); Eldava.go('how')">How it works</a></li>
           <li><button onclick="Eldava.openCarePathway()">Guided pre-consultation</button></li>
@@ -1468,6 +1463,7 @@ export const SHARED_BODY_HTML: string = `
         </ul>
       </div>
     </div>
+    <nav class="foot-popular" aria-label="Popular assessments" id="footPopular"></nav>
     <div class="note-box" style="background:rgba(255,255,255,0.05); border-color:var(--void-line); color:var(--void-soft); margin-top:8px;">All Eldava consultations are delivered online by video, by clinicians licensed in your region. Where a condition requires physical examination, we escalate and refer. We do not diagnose remotely what cannot responsibly be diagnosed remotely.</div>
     <div class="foot-bottom">
       <span>&copy; 2026 Eldava Health. Diagnostic services only. Final clinical decisions rest with the treating licensed clinician. Launch offer applies to the first 2,000 patients booked, one code per patient. £5, or the local equivalent, is donated to our charity partners from every completed assessment.</span>

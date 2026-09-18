@@ -267,3 +267,25 @@ zero horizontal overflow. The three dropdown toggles are `<button>`s nested in
 `.megawrap`, so the nav-item rule must be a descendant selector
 (`nav.links .navlink`), not a child one - the child selector is what left them
 in default button chrome.
+
+## SEO
+
+- **One section per URL.** `lib/activate-route.ts` serves only the requested
+  page's section (plus the account/clinician app screens), not all 27, and
+  promotes its hero heading to the page's single `<h1>`. Navigating to another
+  section is a normal page load (`Eldava.go` in `eldava-app.js`).
+- **Assessment pages** - `/assessments/` and `/assessments/<slug>/`, content
+  in `lib/landing-pages.ts`. Each targets one search intent, with unique copy,
+  FAQ, price and duration pulled from the service catalogue, and
+  `MedicalWebPage` + `FAQPage` + `BreadcrumbList` structured data. To add one,
+  add an entry there - the route, sitemap, footer links and price-list links
+  follow automatically.
+- **Articles** have their own URLs, `/insights/<id>/`, built from `ARTICLES`
+  in `eldava-app.js` (`lib/catalogue.ts`), with `Article` structured data.
+  Old `/#blog-<id>` links redirect.
+- **Structured data** is per page (`lib/seo.ts`); only the organisation and
+  website blocks are sitewide.
+- **Titles/descriptions** live in `lib/routes.ts` (synced into the titles map
+  in `eldava-app.js`).
+- **Sitemap, robots, canonicals** use `NEXT_PUBLIC_SITE_URL`, which is read at
+  build time - set it before `deploy.sh`, and change it when moving to eldava.com.
