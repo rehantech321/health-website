@@ -43,7 +43,18 @@ const CLINICIANS = [
 const HOURS = [9, 10, 11, 13, 14, 15, 16, 17];
 const WEEKS_AHEAD = 4;
 
+// The 13 demo clinicians and their shared password are for local development
+// only. Once a practice has real clinicians, re-running the seed must not put
+// them back: demo data is created ONLY when SEED_DEMO=true. The admin account
+// and the promo code are configuration and are always ensured.
+const SEED_DEMO = process.env.SEED_DEMO === 'true';
+
 async function main() {
+  if (!SEED_DEMO) {
+    console.log('Skipping demo clinicians and slots (set SEED_DEMO=true to create them).');
+    await seedConfig();
+    return;
+  }
   console.log('Seeding clinicians…');
   const clinicians = [];
   for (const c of CLINICIANS) {
@@ -79,6 +90,10 @@ async function main() {
   const result = await prisma.appointmentSlot.createMany({ data: slots, skipDuplicates: true });
   console.log(`  ${result.count} new slots created (${slots.length} considered).`);
 
+  await seedConfig();
+}
+
+async function seedConfig() {
   console.log('Seeding promo code…');
   await prisma.promoCode.upsert({
     where: { code: 'ELDAVA15' },
@@ -102,9 +117,14 @@ async function main() {
 
   console.log('\nDone.');
   console.log(`Admin panel sign-in:  ${ADMIN_EMAIL}  /  ${ADMIN_PASSWORD}   -> /admin/`);
-  console.log('Clinician portal sign-in:');
-  console.log(`  email:    ${CLINICIANS[0].email}  (or any address above)`);
-  console.log(`  password: ${DEMO_PASSWORD}`);
+  if (SEED_DEMO) {
+    console.log('Clinician portal sign-in:');
+    console.log(`  email:    ${CLINICIANS[0].email}  (or any address above)`);
+    console.log(`  password: ${DEMO_PASSWORD}`);
+  } else {
+    console.log('No demo clinicians were created. Add real ones in the admin panel');
+    console.log('(Clinicians -> Add clinician), or approve a doctor who applies at /join-the-network/.');
+  }
 }
 
 main()

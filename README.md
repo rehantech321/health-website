@@ -36,7 +36,8 @@ npm install
 # put DATABASE_URL in .env  (see below - NOT .env.local)
 cp .env.example .env.local        # optional API keys
 npm run db:push                   # create / extend the tables
-npm run db:seed                   # 13 demo clinicians, 4 weeks of slots, ELDAVA15
+npm run db:seed                   # admin account + ELDAVA15 promo code
+# SEED_DEMO=true npm run db:seed  # also 13 demo clinicians and 4 weeks of slots
 npm run dev                       # http://localhost:3000
 ```
 
@@ -60,8 +61,10 @@ labelled mock mode rather than failing:
 | `STRIPE_WEBHOOK_SECRET` | Needed alongside the secret key for real payments to be confirmed. |
 | `RESEND_API_KEY` | Enquiries, applications and confirmations are stored and logged to the console instead of emailed. |
 
-Demo clinician sign-in after seeding: any address in `prisma/seed.js`
-(e.g. `amara.osei@eldava.com`), password `eldava-demo-2026`.
+Demo clinicians are only created when the seed is run with **`SEED_DEMO=true`**,
+so re-seeding a live database never puts them back. When they are seeded, sign
+in with any address in `prisma/seed.js` (e.g. `amara.osei@eldava.com`),
+password `eldava-demo-2026`.
 
 Admin sign-in after seeding: `/admin`, `admin@eldava.com` /
 `eldava-admin-2026`. Override with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`

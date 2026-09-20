@@ -209,10 +209,11 @@ and set `NEXT_PUBLIC_SITE_URL="https://eldava.com"` in `.env.local` + redeploy.
 - **Prisma is built on the server on purpose.** The query engine is
   platform-specific (`rhel-openssl-3.0.x` here). Never copy `node_modules`
   from Windows.
-- **The demo clinicians** (`eldava-demo-2026`) are in the shared Supabase
-  database and will be live on this URL too. Delete or re-password them before
-  sharing the link with anyone: `prisma/seed.js` lists them. Easiest from the
-  admin panel: *Clinicians -> open one -> Deactivate* (or set a new password).
+- **There are no demo clinicians in the database.** It holds only the admin
+  account and the ELDAVA15 promo code. Add real clinicians in the admin panel
+  (*Clinicians -> Add clinician*) or approve doctors who apply on the site.
+  `deploy.sh` never runs the seed, and the seed only creates demo clinicians
+  when run with `SEED_DEMO=true`.
 - **The admin panel** is at `https://app.eldava.com/admin/`. The seeded login is
   `admin@eldava.com` / `eldava-admin-2026` - it is in a public git repo, so
   **change it before anyone else has the link**. Either run the seed once with
