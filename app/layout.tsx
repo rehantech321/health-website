@@ -36,6 +36,13 @@ export const metadata: Metadata = {
     "online specialist assessment, telehealth diagnostic assessment, global telehealth platform, private ADHD diagnosis, autism assessment online, women's health telehealth, endometriosis specialist, dementia memory assessment, men's health MOT, medico-legal capacity assessment, remote psychiatry, pay monthly healthcare assessment, workplace neurodiversity screening, SEN assessment school, DSA assessment university, employer health assessment programme, health system commissioner pilot, buy now pay later healthcare",
   authors: [{ name: 'Eldava Health' }],
   robots: { index: true, follow: true },
+  // Google Search Console ownership. Next renders this as
+  // <meta name="google-site-verification"> on every page. Keep it in place -
+  // Google re-checks it, and removing it can un-verify the property.
+  // GOOGLE_SITE_VERIFICATION overrides it (e.g. for a second property).
+  verification: {
+    google: process.env.GOOGLE_SITE_VERIFICATION || 'ZzoksT7g-IiQ2bQtH2Ys2ajXfjLq3uEKprIC8pUTJaA',
+  },
   openGraph: {
     type: 'website',
     siteName: 'Eldava Health',
