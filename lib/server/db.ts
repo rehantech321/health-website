@@ -39,10 +39,18 @@ function buildClient() {
   });
 }
 
-export const prisma = globalForPrisma.__eldavaPrisma ?? buildClient();
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.__eldavaPrisma = prisma;
-}
+// Built on first use, not at import. A missing or malformed DATABASE_URL makes
+// the PrismaClient constructor throw; at import time that takes the whole route
+// module down and the visitor gets a bare HTML "500: Internal Server Error"
+// with nothing in it to act on. Deferring it means the error is thrown inside
+// a request handler instead, where withErrors() turns it into our own JSON
+// error and the admin System status can report "database unreachable".
+export const prisma: ReturnType<typeof buildClient> = new Proxy({} as ReturnType<typeof buildClient>, {
+  get(_t, prop, receiver) {
+    if (!globalForPrisma.__eldavaPrisma) globalForPrisma.__eldavaPrisma = buildClient();
+    const value = Reflect.get(globalForPrisma.__eldavaPrisma as object, prop, receiver);
+    return typeof value === 'function' ? value.bind(globalForPrisma.__eldavaPrisma) : value;
+  },
+});
 
 export default prisma;

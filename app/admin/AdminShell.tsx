@@ -76,7 +76,19 @@ function Login({ onDone }: { onDone: (a: Admin) => void }) {
     setBusy(true); setError('');
     const r = await api<{ admin: Admin }>('/api/admin/login', { json: { email, password } });
     setBusy(false);
-    if (!r.ok) { setError(r.data.error || 'Sign-in failed.'); return; }
+    if (!r.ok) {
+      // A 5xx is the server's problem, not a wrong password - say which, so
+      // nobody spends an afternoon retyping a password that was always right.
+      setError(
+        r.data.error ||
+          (r.status >= 500
+            ? `The server could not complete sign-in (HTTP ${r.status}). This is usually the database connection, not your password - check DATABASE_URL on the server and the app logs.`
+            : r.status === 0
+            ? 'Could not reach the server. Check your connection.'
+            : 'Sign-in failed. Check the email and password.')
+      );
+      return;
+    }
     onDone(r.data.admin);
   }
 

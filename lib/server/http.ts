@@ -40,6 +40,14 @@ export function withErrors<T extends (...args: any[]) => Promise<Response>>(hand
     } catch (error) {
       const req = args[0] as Request | undefined;
       console.error(`[api] ${req?.method ?? ''} ${req?.url ?? ''} failed:`, error);
+      // A database that cannot be reached (wrong or missing DATABASE_URL,
+      // credentials rotated, provider down) is worth naming: it is the same
+      // symptom for every endpoint, and "try again" is misleading advice.
+      const name = (error as any)?.name || '';
+      const msg = String((error as any)?.message || '');
+      if (name === 'PrismaClientInitializationError' || /Environment variable not found: DATABASE_URL|Can't reach database server|Authentication failed against database/i.test(msg)) {
+        return fail('The service is temporarily unavailable: the server cannot reach its database. Nothing you did caused this.', 503);
+      }
       return fail('Something went wrong. Please try again.', 500);
     }
   }) as T;
