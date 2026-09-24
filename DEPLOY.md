@@ -201,11 +201,74 @@ certbot --nginx -d eldava.com -d www.eldava.com -d app.eldava.com --redirect
 
 and set `NEXT_PUBLIC_SITE_URL="https://eldava.com"` in `.env.local` + redeploy.
 
+## Securing SSH (do this early)
+
+This box is on the public internet and is being brute-forced: one login reported
+**277 failed root logins** between two of our own sessions. That is routine for
+any VPS, and routine is exactly why it has to be closed off - this server holds
+patient data. Three steps, in this order.
+
+**a. Install fail2ban** (bans an IP after repeated failures):
+
+```bash
+dnf -y install epel-release && dnf -y install fail2ban
+cat > /etc/fail2ban/jail.local <<'EOF'
+[sshd]
+enabled  = true
+maxretry = 5
+findtime = 10m
+bantime  = 1h
+EOF
+systemctl enable --now fail2ban
+fail2ban-client status sshd        # shows currently banned IPs
+```
+
+**b. Set up a key, and test it before changing anything else.** On your PC:
+
+```powershell
+ssh-keygen -t ed25519 -C "eldava-vps"          # press Enter for the default path
+type $env:USERPROFILE\.ssh\id_ed25519.pub      # copy this line
+```
+
+On the server, paste it in:
+
+```bash
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+nano ~/.ssh/authorized_keys                    # paste the public key, save
+chmod 600 ~/.ssh/authorized_keys
+```
+
+Open a **second** terminal and check that `ssh root@162.0.239.195` now logs in
+without asking for a password. Keep the first terminal open until it does.
+
+**c. Turn off password logins** (only once the key works):
+
+```bash
+sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+sshd -t && systemctl reload sshd
+```
+
+Brute-force attempts then cannot succeed at all, whatever password they guess.
+
 ## Things to know about this box
 
-- **1 GB RAM.** The running app uses ~200 MB; the *build* is what needs swap.
-  `deploy.sh` caps Node at 1.5 GB heap and PM2 restarts the app if it ever
-  passes 600 MB. Do not run two builds at once.
+- **1 GB RAM - this is the thing that breaks deploys.** If a deploy stops with
+  `Killed` and nothing else, the kernel ran out of memory. `deploy.sh` now
+  checks swap before it starts and tells you; to fix it, as root:
+
+  ```bash
+  bash /var/www/eldava/deploy/add-swap.sh      # creates/restores the 2 GB swap file
+  free -h                                     # Swap total should be 2.0Gi
+  ```
+
+  The install runs with a 512 MB heap and no package install scripts (Prisma's
+  client is generated explicitly in the next step), and the build is capped at
+  1 GB. Do not run two builds at once.
+- **Run deploys as the `eldava` user, not root.** `sudo -iu eldava bash
+  /var/www/eldava/deploy/deploy.sh`. A deploy run as root leaves root-owned
+  files in the app directory, and the next deploy as `eldava` then fails on
+  permissions. If that has happened:
+  `chown -R eldava:eldava /var/www/eldava`.
 - **Prisma is built on the server on purpose.** The query engine is
   platform-specific (`rhel-openssl-3.0.x` here). Never copy `node_modules`
   from Windows.
