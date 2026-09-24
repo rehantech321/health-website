@@ -1,7 +1,7 @@
 import prisma from '@/lib/server/db';
 import { requireAdmin } from '@/lib/server/auth';
 import { json, siteUrl, withErrors } from '@/lib/server/http';
-import { getStripe, isLive as stripeLive } from '@/lib/server/payments';
+import { getStripe, isLive as stripeLive, keyKind, keyFingerprint, keyProblem, webhookSecret } from '@/lib/server/payments';
 import { isLive as aiLive } from '@/lib/server/anthropic';
 import { transport } from '@/lib/server/mail';
 
@@ -34,9 +34,14 @@ export const GET = withErrors(async (req: Request) =>
       checks.klarna = { status: 'warn', detail: 'Simulated (mock mode).' };
       checks.webhook = { status: 'warn', detail: 'Not needed in mock mode.' };
     } else {
-      const key = process.env.STRIPE_SECRET_KEY || '';
-      const mode = key.startsWith('sk_live_') ? 'LIVE' : key.startsWith('sk_test_') ? 'TEST' : 'unknown key format';
-      try {
+      const kind = keyKind();
+      const mode = kind === 'secret-live' || kind === 'restricted-live' ? 'LIVE' : kind === 'secret-test' || kind === 'restricted-test' ? 'TEST' : 'unrecognised key';
+      const problem = keyProblem();
+      if (problem) {
+        // Wrong kind of key: say so exactly, without calling Stripe at all.
+        checks.payments = { status: 'bad', detail: `${problem} Currently set to: ${keyFingerprint()}.` };
+        checks.klarna = { status: 'bad', detail: 'Cannot check until the secret key is correct.' };
+      } else try {
         const stripe = getStripe();
         const account = await stripe.accounts.retrieve();
         checks.payments = {
@@ -51,10 +56,17 @@ export const GET = withErrors(async (req: Request) =>
         else checks.klarna = { status: 'ok', detail: 'Klarna active on the Stripe account.' };
       } catch (e) {
         const msg = (e as Error).message;
-        checks.payments = { status: 'bad', detail: /invalid api key|authentication/i.test(msg) ? `STRIPE_SECRET_KEY is not accepted by Stripe (${mode}). Check it in .env.local.` : `Stripe error: ${msg}` };
+        checks.payments = {
+          status: 'bad',
+          detail: /invalid api key|authentication/i.test(msg)
+            ? `Stripe rejected STRIPE_SECRET_KEY (${mode}, ${keyFingerprint()}). It is the right shape but not a key Stripe recognises: it may be from a different account, rolled/deleted in the Dashboard, or truncated. Copy it again from Developers -> API keys and redeploy.`
+            : /permission|not permitted/i.test(msg)
+            ? `The key is accepted but lacks permissions (${keyFingerprint()}). A restricted key needs write access to Checkout Sessions. Stripe said: ${msg}`
+            : `Stripe error: ${msg}`,
+        };
         checks.klarna = { status: 'bad', detail: 'Cannot check while the Stripe key is failing.' };
       }
-      checks.webhook = process.env.STRIPE_WEBHOOK_SECRET
+      checks.webhook = webhookSecret()
         ? { status: 'ok', detail: `STRIPE_WEBHOOK_SECRET set. Endpoint must be ${siteUrl(req)}/api/payments/webhook with checkout.session.completed / .async_payment_succeeded / .async_payment_failed / .expired.` }
         : { status: 'bad', detail: 'STRIPE_WEBHOOK_SECRET missing - payments will never be confirmed. Add the endpoint in Stripe Dashboard -> Developers -> Webhooks.' };
     }

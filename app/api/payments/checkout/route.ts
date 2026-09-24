@@ -10,8 +10,10 @@ const METHODS = new Set(['CARD', 'KLARNA']);
 function describeProviderError(e: unknown, method: 'CARD' | 'KLARNA'): string {
   const msg = String((e as any)?.message || '');
   const code = String((e as any)?.code || (e as any)?.type || '');
-  if (/invalid api key|authentication/i.test(msg) || code === 'StripeAuthenticationError') {
-    return 'Payments are not configured correctly on our side. Please try again later or contact us.';
+  // Our own pre-flight message about the key, or Stripe rejecting it: either
+  // way it is our configuration, never anything the patient can fix.
+  if (/STRIPE_SECRET_KEY/.test(msg) || /invalid api key|authentication/i.test(msg) || code === 'StripeAuthenticationError') {
+    return 'Card payments are temporarily unavailable while we finish setting up our payment provider. Nothing has been charged and your appointment time is still held. Please try again shortly, or contact us and we will take payment another way.';
   }
   if (method === 'KLARNA' && /klarna/i.test(msg)) {
     return 'Pay later with Klarna is not available at the moment. Please pay in full by card instead.';
