@@ -87,7 +87,11 @@ export type CheckoutTarget = {
   cancelUrl: string;
 };
 
-export async function createCheckout(target: CheckoutTarget, siteUrl: string) {
+/// Just the part of the Stripe client this module uses, so tests can pass a
+/// stub without standing up the real SDK.
+export type CheckoutCreator = { checkout: { sessions: { create: (p: Stripe.Checkout.SessionCreateParams) => Promise<{ id: string; url: string | null }> } } };
+
+export async function createCheckout(target: CheckoutTarget, siteUrl: string, client?: CheckoutCreator) {
   // Catch a wrong key kind here rather than after a round trip to Stripe, so
   // the error names the actual problem.
   const problem = keyProblem();
@@ -101,9 +105,8 @@ export async function createCheckout(target: CheckoutTarget, siteUrl: string) {
     };
   }
 
-  const session = await getStripe().checkout.sessions.create({
+  const base: Stripe.Checkout.SessionCreateParams = {
     mode: 'payment',
-    payment_method_types: target.method === 'KLARNA' ? ['klarna'] : ['card'],
     customer_email: target.customerEmail,
     client_reference_id: target.reference,
     line_items: [
@@ -120,9 +123,38 @@ export async function createCheckout(target: CheckoutTarget, siteUrl: string) {
     success_url: target.successUrl,
     cancel_url: target.cancelUrl,
     expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
-  });
+  };
+  const methods: Stripe.Checkout.SessionCreateParams.PaymentMethodType[] = target.method === 'KLARNA' ? ['klarna'] : ['card'];
 
-  return { mock: false, id: session.id, url: session.url as string };
+  // Stripe accounts differ in whether "Managed Payments" (Stripe as merchant
+  // of record) is on. It forbids payment_method_types and chooses the methods
+  // itself, while older accounts reject the managed_payments parameter. Rather
+  // than depend on an account setting we cannot see, try the combinations in
+  // order of how much control they give us, and keep the first that works.
+  //   1. methods we choose, Managed Payments explicitly off  (full control)
+  //   2. methods we choose                                   (account has no Managed Payments)
+  //   3. Stripe chooses from the methods enabled on the account
+  const attempts: { label: string; params: Stripe.Checkout.SessionCreateParams }[] = [
+    { label: 'payment_method_types + managed_payments disabled', params: { ...base, payment_method_types: methods, managed_payments: { enabled: false } } as Stripe.Checkout.SessionCreateParams },
+    { label: 'payment_method_types', params: { ...base, payment_method_types: methods } },
+    { label: 'dynamic payment methods (Stripe chooses)', params: base },
+  ];
+
+  let lastError: unknown;
+  for (const attempt of attempts) {
+    try {
+      const session = await (client ?? getStripe()).checkout.sessions.create(attempt.params);
+      return { mock: false, id: session.id, url: session.url as string, via: attempt.label };
+    } catch (e) {
+      lastError = e;
+      // Only an "unsupported/unknown parameter" complaint is worth retrying:
+      // a declined card or a bad amount would fail the same way every time.
+      const msg = String((e as Error)?.message || '');
+      if (!/unsupported parameter|unknown parameter|received unknown/i.test(msg)) throw e;
+      console.warn(`[payments] Stripe rejected "${attempt.label}" (${msg.split('.')[0]}); trying the next form.`);
+    }
+  }
+  throw lastError;
 }
 
 /// The webhook signing secret, cleaned the same way as the API key.
